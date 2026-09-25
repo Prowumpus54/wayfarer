@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/classify-combat.js": {
+      "maxDuration": 10
+    }
+  }
+}

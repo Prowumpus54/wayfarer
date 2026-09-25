@@ -1,0 +1,10 @@
+{
+  "name": "wayfarer-jev-proxy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@vercel/oidc": "^3.0.6",
+    "firebase-admin": "^13.4.0"
+  }
+}

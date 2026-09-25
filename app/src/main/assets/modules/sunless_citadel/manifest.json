@@ -1,0 +1,11 @@
+{
+  "id": "sunless_citadel",
+  "title": "The Sunless Citadel",
+  "version": "0.2.0",
+  "ruleset": "pf2e-adapted",
+  "description": "A lost fortress beneath the earth, rival tribes in its halls, and a dark mystery rooted in the Twilight Grove.",
+  "startingLocation": "oakhurst",
+  "minLevel": 1,
+  "maxLevel": 3,
+  "source": "The_Sunless_Citadel_3e.pdf"
+}

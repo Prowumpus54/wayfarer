@@ -1,0 +1,46 @@
+CASES = [
+    ("I swing my longsword at the goblin.", "strike", "enemy", False, False),
+    ("I fire my bow at the kobold across the room.", "strike", "enemy", False, False),
+    ("I punch the skeleton in front of me.", "strike", "enemy", False, False),
+    ("I rush the goblin and slash it with my sword.", "strike", "enemy", True, False),
+    ("I step behind the pillar.", "move", "environment", True, False),
+    ("I retreat thirty feet from the ogre.", "move", "enemy", True, False),
+    ("I run to Lyria's side.", "move", "ally", True, False),
+    ("I circle around the troll to the doorway.", "move", "environment", True, False),
+    ("I cast heal on Brom.", "cast_spell", "ally", False, False),
+    ("I cast shield on myself.", "cast_spell", "self", False, False),
+    ("I cast magic missile at the goblin.", "cast_spell", "enemy", False, False),
+    ("I sustain the spell on the cultist.", "cast_spell", "enemy", False, False),
+    ("I draw my dagger.", "interact", "self", False, False),
+    ("I open the door beside me.", "interact", "environment", False, False),
+    ("I pick up the fallen key.", "interact", "environment", False, False),
+    ("I pull the lever on the wall.", "interact", "environment", False, False),
+    ("I try to shove the goblin backward.", "skill_action", "enemy", False, False),
+    ("I feint at the bandit.", "skill_action", "enemy", False, False),
+    ("I try to demoralize the orc.", "skill_action", "enemy", False, False),
+    ("I tumble through the ogre's reach.", "skill_action", "enemy", True, False),
+    ("I raise my shield.", "defend", "self", False, False),
+    ("I take cover behind the overturned table.", "defend", "environment", True, False),
+    ("I guard the doorway.", "defend", "environment", False, False),
+    ("I help Brom hold the door shut.", "aid", "ally", False, False),
+    ("I aid Lyria's next attack.", "aid", "ally", False, False),
+    ("I ready my bow for when the goblin leaves cover.", "ready", "enemy", False, False),
+    ("I ready an action to close the door when they enter.", "ready", "environment", False, False),
+    ("I leap from the balcony and try to land on the ogre's back.", "other", "enemy", True, True),
+    ("I cut the chandelier rope so it crashes onto the guards.", "other", "environment", False, True),
+    ("I convince the goblins to stop fighting and hear us out.", "other", "enemy", False, True),
+    ("I throw sand in the knight's eyes and dive under the table.", "other", "enemy", True, True),
+    ("I use the loose masonry to collapse the tunnel behind us.", "other", "environment", False, True),
+]
+
+def structured_case(item):
+    text, action, target, movement, needs_gm = item
+    return {
+        "text": text,
+        "expected": {
+            "actionType": action,
+            "targetType": target,
+            "includesMovement": movement,
+            "needsGm": needs_gm,
+        },
+    }

@@ -1,0 +1,109 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function campaign(campaignId) {
+      return get(/databases/$(database)/documents/campaigns/$(campaignId));
+    }
+
+    function isOwner(campaignId) {
+      return signedIn() &&
+        campaign(campaignId).data.ownerUid == request.auth.uid;
+    }
+
+    function isOwnerAfter(campaignId) {
+      return signedIn() &&
+        getAfter(/databases/$(database)/documents/campaigns/$(campaignId)).data.ownerUid == request.auth.uid;
+    }
+
+    function isMember(campaignId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/campaigns/$(campaignId)/members/$(request.auth.uid));
+    }
+
+    function hasActiveInvite(campaignId) {
+      let code = campaign(campaignId).data.inviteCode;
+      return code is string &&
+        exists(/databases/$(database)/documents/inviteCodes/$(code)) &&
+        get(/databases/$(database)/documents/inviteCodes/$(code)).data.active == true;
+    }
+
+    match /users/{uid} {
+      allow read, create, update: if isSelf(uid);
+      allow delete: if isSelf(uid);
+
+      match /campaigns/{campaignId} {
+        allow read, create, update, delete: if isSelf(uid);
+      }
+    }
+
+    match /campaigns/{campaignId} {
+      allow create: if signedIn() &&
+        request.resource.data.ownerUid == request.auth.uid;
+
+      allow get: if signedIn();
+      allow list: if false;
+      allow update, delete: if isOwner(campaignId);
+
+      match /members/{memberUid} {
+        allow read: if isMember(campaignId);
+        allow create: if signedIn() && (
+          isOwnerAfter(campaignId) ||
+          (
+            memberUid == request.auth.uid &&
+            request.resource.data.role == "player" &&
+            hasActiveInvite(campaignId)
+          )
+        );
+        allow update: if isOwner(campaignId) || (
+          memberUid == request.auth.uid &&
+          request.resource.data.role == resource.data.role
+        );
+        allow delete: if isOwner(campaignId) || memberUid == request.auth.uid;
+      }
+
+      match /characters/{characterId} {
+        allow read, create, update: if isMember(campaignId);
+        allow delete: if isOwner(campaignId);
+      }
+
+      match /worldState/{document=**} {
+
+        allow read: if isMember(campaignId);
+        allow write: if isOwner(campaignId);
+      }
+
+      match /events/{eventId} {
+        allow read, create: if isMember(campaignId);
+        allow update, delete: if isOwner(campaignId);
+      }
+
+      match /actions/{actionId} {
+        allow read: if isMember(campaignId);
+        allow create: if isMember(campaignId) &&
+          request.resource.data.userId == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+
+    match /inviteCodes/{code} {
+      allow get: if signedIn();
+      allow list: if false;
+      allow create: if signedIn() &&
+        request.resource.data.ownerUid == request.auth.uid &&
+        existsAfter(/databases/$(database)/documents/campaigns/$(request.resource.data.campaignId)) &&
+        getAfter(/databases/$(database)/documents/campaigns/$(request.resource.data.campaignId)).data.ownerUid == request.auth.uid;
+
+      allow update, delete: if signedIn() &&
+        resource.data.ownerUid == request.auth.uid;
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "moduleId": "sunless_citadel",
+  "maps": [
+    {
+      "id": "overview",
+      "title": "Oakhurst & Citadel Overview",
+      "asset": "modules/sunless_citadel/maps/overview_maps.webp",
+      "sourcePage": 2,
+      "kind": "overview",
+      "playerSafe": false
+    },
+    {
+      "id": "grove_level",
+      "title": "Grove Level",
+      "asset": "modules/sunless_citadel/maps/grove_level_map.webp",
+      "sourcePage": 35,
+      "kind": "dungeon",
+      "playerSafe": false
+    }
+  ]
+}
