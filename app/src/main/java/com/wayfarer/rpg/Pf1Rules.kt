@@ -348,9 +348,34 @@ object Pf1CharacterMigration {
             .firstOrNull { it.key.equals("Ranger", true) }
             ?.value ?: 0
         val slots = if (rangerLevel > 0 && character.spellSlots.isEmpty()) {
-            pf1RangerBaseSpellSlots(rangerLevel)
+            pf1RangerBaseSpellSlots(rangerLevel).mapValues { (spellLevel, base) ->
+                base + pf1BonusSpells(
+                    character.abilities[Ability.WIS] ?: 10,
+                    spellLevel
+                )
+            }
         } else {
             character.spellSlots
+        }
+
+        val mappedClassFeats = character.classFeats
+            .filterNot { it.equals("Hunted Shot", true) }
+            .toMutableList()
+            .apply {
+                if (
+                    character.classFeats.any { it.equals("Hunted Shot", true) } &&
+                    none { it.equals("Rapid Shot", true) }
+                ) {
+                    add("Rapid Shot")
+                }
+            }
+        val mappedBonusFeats = character.bonusFeats.toMutableList().apply {
+            if (
+                rangerLevel >= 3 &&
+                none { it.equals("Endurance", true) }
+            ) {
+                add("Endurance")
+            }
         }
 
         return character.copy(
@@ -359,6 +384,10 @@ object Pf1CharacterMigration {
             pf1ClassLevels = classLevels,
             pf1SkillRanks = migratedRanks,
             xp = migratedXp,
+            ancestryFeats = emptyList(),
+            classFeats = mappedClassFeats,
+            skillFeats = emptyList(),
+            bonusFeats = mappedBonusFeats,
             spellSlots = slots,
             focusCurrent = 0,
             focusMax = 0
