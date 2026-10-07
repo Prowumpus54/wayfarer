@@ -52,6 +52,8 @@ class CharacterStore(
         json.put("tempHp", c.tempHp)
         json.put("dying", c.dying)
         json.put("wounded", c.wounded)
+        json.put("pf1Stable", c.pf1Stable)
+        json.put("pf1Dead", c.pf1Dead)
         json.put("conditions", c.conditions)
         json.put("heroPoints", c.heroPoints)
         json.put("size", c.size)
@@ -243,6 +245,8 @@ class CharacterStore(
             tempHp = json.optInt("tempHp", base.tempHp),
             dying = json.optInt("dying", base.dying),
             wounded = json.optInt("wounded", base.wounded),
+            pf1Stable = json.optBoolean("pf1Stable", false),
+            pf1Dead = json.optBoolean("pf1Dead", false),
             conditions = json.optString("conditions", base.conditions),
             heroPoints = json.optInt("heroPoints", 1),
             abilities = abilities,
