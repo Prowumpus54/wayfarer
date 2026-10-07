@@ -299,6 +299,7 @@ fun WayfarerApp() {
                         gameStateStore.save(application.runtime)
                     }
                     application.events.forEach(::addEvent)
+                    application
                 },
                 onXpAward = { amount ->
                     val active = characters[selectedMember]
