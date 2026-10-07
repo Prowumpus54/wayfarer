@@ -365,7 +365,12 @@ fun PlayScreen(
                 Text("Send recorded dice to GM", color = Green)
             }
         }
-        Spacer(Modifier.height(8.dp))
+        if (runtimeState.activeEncounter != null || runtimeState.activeChallenge != null) {
+            RuntimeStateCard(runtimeState)
+            Spacer(Modifier.height(6.dp))
+        } else {
+            Spacer(Modifier.height(8.dp))
+        }
         FramedCard(
             Modifier
                 .fillMaxWidth()
