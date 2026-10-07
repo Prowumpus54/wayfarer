@@ -277,6 +277,47 @@ class RulesRepository(context: Context) {
         return null
     }
 
+    fun findCreatureCombatProfile(query: String): CreatureCombatProfile? {
+        val clean = query.trim()
+        if (clean.isBlank()) return null
+
+        val candidates = mutableListOf<Triple<String, String, String>>()
+        database.rawQuery(
+            """SELECT uid,name,raw_json
+               FROM entries
+               WHERE kind='creature'
+                 AND (uid=? OR name_search LIKE ?)
+               LIMIT 80""".trimIndent(),
+            arrayOf(clean, "%" + clean.lowercase() + "%")
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                candidates += Triple(
+                    cursor.getString(0),
+                    cursor.getString(1),
+                    cursor.getString(2)
+                )
+            }
+        }
+
+        if (candidates.isEmpty()) return null
+        val normalized = clean.lowercase()
+        val best = candidates.maxByOrNull { (_, name, _) ->
+            val candidate = name.lowercase()
+            when {
+                candidate == normalized -> 1000
+                candidate == normalized + " warrior" -> 900
+                candidate.startsWith(normalized + " ") -> 700
+                candidate.contains(normalized) -> 500
+                else -> 0
+            } - kotlin.math.abs(candidate.length - normalized.length)
+        } ?: return null
+
+        return CreatureCombatProfileParser.parse(
+            ruleRef = best.first,
+            rawJson = best.third
+        )
+    }
+
     fun classProgression(className: String): ClassProgression? {
         database.rawQuery(
             "SELECT name,hp,key_abilities_json,class_feat_levels_json," +
