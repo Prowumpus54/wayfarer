@@ -63,6 +63,30 @@ object DiceEngine {
         return roll(sides = sides, count = count, modifier = modifier)
     }
 
+    fun rawD20(): Int = rng.nextInt(20) + 1
+
+    fun pf1Check(
+        modifier: Int,
+        dc: Int,
+        automaticOnNatural: Boolean = false,
+        dieRoller: () -> Int = ::rawD20
+    ): CheckResult {
+        val die = dieRoller().coerceIn(1, 20)
+        val total = die + modifier
+        val success = when {
+            automaticOnNatural && die == 1 -> false
+            automaticOnNatural && die == 20 -> true
+            else -> total >= dc
+        }
+        return CheckResult(
+            die = die,
+            modifier = modifier,
+            total = total,
+            dc = dc,
+            degree = if (success) Degree.SUCCESS else Degree.FAILURE
+        )
+    }
+
     fun d20(modifier: Int, dc: Int): CheckResult {
         val die = rng.nextInt(20) + 1
         val total = die + modifier
