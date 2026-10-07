@@ -173,8 +173,26 @@ fun PlayScreen(
             npcs = moduleScene?.npcs
                 ?.map { it.name + if (it.role.isBlank()) "" else " (" + it.role + ")" }
                 .orEmpty(),
-            encounters = moduleScene?.encounters
-                ?.map { it.name + " [" + it.difficulty + "]: " + it.gmNotes }
+            encounters = moduleScene?.let { scene ->
+                scene.encounters.map { encounter ->
+                    val creatures = scene.encounterCreatures
+                        .filter { it.encounterId == encounter.id }
+                        .joinToString("; ") {
+                            it.quantity.toString() + " × " + it.creatureRuleRef +
+                                if (it.role.isBlank()) "" else " (" + it.role + ")"
+                        }
+                    encounter.name + " [" + encounter.difficulty + "]: " +
+                        encounter.gmNotes +
+                        if (creatures.isBlank()) "" else "\nCreatures: " + creatures
+                }
+            }.orEmpty(),
+            treasure = moduleScene?.treasure
+                ?.map {
+                    it.name + " ×" + it.quantity +
+                        if (it.ruleRef.isBlank()) "" else " [" + it.ruleRef + "]" +
+                        if (it.hidden) " [hidden]" else "" +
+                        if (it.gmNotes.isBlank()) "" else ": " + it.gmNotes
+                }
                 .orEmpty(),
             character = character,
             party = party,
