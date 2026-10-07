@@ -42,6 +42,10 @@ class CharacterStore(
         json.put("level", c.level)
         json.put("maxHp", c.maxHp)
         json.put("currentHp", c.currentHp)
+        json.put("tempHp", c.tempHp)
+        json.put("dying", c.dying)
+        json.put("wounded", c.wounded)
+        json.put("conditions", c.conditions)
         json.put("heroPoints", c.heroPoints)
         json.put("keyAbility", c.keyAbility.name)
         json.put("armorName", c.armorName)
@@ -72,6 +76,22 @@ class CharacterStore(
         json.put("spellcastingAbility", c.spellcastingAbility.name)
         json.put("focusCurrent", c.focusCurrent)
         json.put("focusMax", c.focusMax)
+        json.put("currencyCp", c.currencyCp)
+        json.put("currencySp", c.currencySp)
+        json.put("currencyGp", c.currencyGp)
+        json.put("currencyPp", c.currencyPp)
+
+        val spellSlots = JSONObject()
+        c.spellSlots.forEach { (level, count) ->
+            spellSlots.put(level.toString(), count)
+        }
+        json.put("spellSlots", spellSlots)
+
+        val spellSlotsUsed = JSONObject()
+        c.spellSlotsUsed.forEach { (level, count) ->
+            spellSlotsUsed.put(level.toString(), count)
+        }
+        json.put("spellSlotsUsed", spellSlotsUsed)
 
         val spells = JSONObject()
         c.spells.forEach { (level, names) ->
@@ -126,6 +146,9 @@ class CharacterStore(
                 }
             }.orEmpty()
 
+        val spellSlots = intMap(json.optJSONObject("spellSlots"))
+        val spellSlotsUsed = intMap(json.optJSONObject("spellSlotsUsed"))
+
         val spellsJson = json.optJSONObject("spells")
         val spells = mutableMapOf<Int, List<String>>()
         if (spellsJson != null) {
@@ -147,6 +170,10 @@ class CharacterStore(
             level = json.optInt("level", 1).coerceIn(1, 20),
             maxHp = json.optInt("maxHp", base.maxHp),
             currentHp = json.optInt("currentHp", base.maxHp),
+            tempHp = json.optInt("tempHp", base.tempHp),
+            dying = json.optInt("dying", base.dying),
+            wounded = json.optInt("wounded", base.wounded),
+            conditions = json.optString("conditions", base.conditions),
             heroPoints = json.optInt("heroPoints", 1),
             abilities = abilities,
             keyAbility = enumValue(
@@ -183,8 +210,25 @@ class CharacterStore(
             ),
             focusCurrent = json.optInt("focusCurrent", base.focusCurrent),
             focusMax = json.optInt("focusMax", base.focusMax),
-            spells = spells
+            spellSlots = spellSlots,
+            spellSlotsUsed = spellSlotsUsed,
+            spells = spells,
+            currencyCp = json.optInt("currencyCp", base.currencyCp),
+            currencySp = json.optInt("currencySp", base.currencySp),
+            currencyGp = json.optInt("currencyGp", base.currencyGp),
+            currencyPp = json.optInt("currencyPp", base.currencyPp)
         )
+    }
+
+    private fun intMap(json: JSONObject?): Map<Int, Int> {
+        if (json == null) return emptyMap()
+        val out = mutableMapOf<Int, Int>()
+        json.keys().forEach { key ->
+            key.toIntOrNull()?.let { level ->
+                out[level] = json.optInt(key, 0).coerceAtLeast(0)
+            }
+        }
+        return out
     }
 
     private fun stringList(array: JSONArray?): List<String> =
