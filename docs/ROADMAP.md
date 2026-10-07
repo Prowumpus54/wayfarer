@@ -31,3 +31,23 @@ Remaining before calling combat mechanically authoritative:
 - route attacks, saves, damage, initiative and turn order through a rules-engine result object rather than model-selected mechanics;
 - define PF1e-specific XP/CR and spell-resource rules once the current PF2e-adapted data/model mismatch is resolved;
 - add cloud synchronization/conflict policy for runtime state.
+
+
+## Bounded combat resolver update
+
+Implemented after the initial game-state engine:
+- local rules database lookup for creature combat profiles (the current asset contains 1,429 creature records);
+- authoritative creature HP, AC, saves, initiative and primary attack parsing;
+- click-to-select encounter targets;
+- local initiative rolls and persistent turn/round order;
+- local player strike vs AC, hit/critical/miss resolution and local damage;
+- local basic creature attacks against player AC with HP updates;
+- automatic enemy turn progression until the player's next turn;
+- deterministic unit-test injection for attack, damage and initiative dice;
+- GM narration after mechanics are committed, with returned state effects discarded.
+
+Still intentionally blocked or delegated:
+- PF1e authoritative combat, because the installed character/rules schema is still PF2e-adapted and lacks PF1e BAB, iterative attacks, CMB/CMD and PF1e class/resource progression;
+- tactical enemy action selection beyond the resolved creature's primary attack;
+- spell attack/save/effect automation beyond the existing locally resolved player checks and spell-resource consumption;
+- multi-PC initiative/turn ownership; the current encounter engine has one active player character plus creatures.
