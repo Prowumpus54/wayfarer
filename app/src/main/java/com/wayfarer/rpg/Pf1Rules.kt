@@ -267,6 +267,86 @@ fun pf1XpForCr(cr: String): Int = when (cr.trim()) {
     else -> 0
 }
 
+private fun indexedSlots(
+    counts: IntArray,
+    firstSpellLevel: Int = 0
+): Map<Int, Int> =
+    counts.mapIndexed { index, count ->
+        (index + firstSpellLevel) to count
+    }.toMap()
+
+private val pf1FullPreparedSpellSlots = listOf(
+    intArrayOf(),
+    intArrayOf(3, 1),
+    intArrayOf(4, 2),
+    intArrayOf(4, 2, 1),
+    intArrayOf(4, 3, 2),
+    intArrayOf(4, 3, 2, 1),
+    intArrayOf(4, 3, 3, 2),
+    intArrayOf(4, 4, 3, 2, 1),
+    intArrayOf(4, 4, 3, 3, 2),
+    intArrayOf(4, 4, 4, 3, 2, 1),
+    intArrayOf(4, 4, 4, 3, 3, 2),
+    intArrayOf(4, 4, 4, 4, 3, 2, 1),
+    intArrayOf(4, 4, 4, 4, 3, 3, 2),
+    intArrayOf(4, 4, 4, 4, 4, 3, 2, 1),
+    intArrayOf(4, 4, 4, 4, 4, 3, 3, 2),
+    intArrayOf(4, 4, 4, 4, 4, 4, 3, 2, 1),
+    intArrayOf(4, 4, 4, 4, 4, 4, 3, 3, 2),
+    intArrayOf(4, 4, 4, 4, 4, 4, 4, 3, 2, 1),
+    intArrayOf(4, 4, 4, 4, 4, 4, 4, 3, 3, 2),
+    intArrayOf(4, 4, 4, 4, 4, 4, 4, 4, 3, 3),
+    intArrayOf(4, 4, 4, 4, 4, 4, 4, 4, 4, 4)
+)
+
+private val pf1SorcererSpellSlots = listOf(
+    intArrayOf(),
+    intArrayOf(3),
+    intArrayOf(4),
+    intArrayOf(5),
+    intArrayOf(6, 3),
+    intArrayOf(6, 4),
+    intArrayOf(6, 5, 3),
+    intArrayOf(6, 6, 4),
+    intArrayOf(6, 6, 5, 3),
+    intArrayOf(6, 6, 6, 4),
+    intArrayOf(6, 6, 6, 5, 3),
+    intArrayOf(6, 6, 6, 6, 4),
+    intArrayOf(6, 6, 6, 6, 5, 3),
+    intArrayOf(6, 6, 6, 6, 6, 4),
+    intArrayOf(6, 6, 6, 6, 6, 5, 3),
+    intArrayOf(6, 6, 6, 6, 6, 6, 4),
+    intArrayOf(6, 6, 6, 6, 6, 6, 5, 3),
+    intArrayOf(6, 6, 6, 6, 6, 6, 6, 4),
+    intArrayOf(6, 6, 6, 6, 6, 6, 6, 5, 3),
+    intArrayOf(6, 6, 6, 6, 6, 6, 6, 6, 4),
+    intArrayOf(6, 6, 6, 6, 6, 6, 6, 6, 6)
+)
+
+private val pf1BardSpellSlots = listOf(
+    intArrayOf(),
+    intArrayOf(1),
+    intArrayOf(2),
+    intArrayOf(3),
+    intArrayOf(3, 1),
+    intArrayOf(4, 2),
+    intArrayOf(4, 3),
+    intArrayOf(4, 3, 1),
+    intArrayOf(4, 4, 2),
+    intArrayOf(5, 4, 3),
+    intArrayOf(5, 4, 3, 1),
+    intArrayOf(5, 4, 4, 2),
+    intArrayOf(5, 5, 4, 3),
+    intArrayOf(5, 5, 4, 3, 1),
+    intArrayOf(5, 5, 4, 4, 2),
+    intArrayOf(5, 5, 5, 4, 3),
+    intArrayOf(5, 5, 5, 4, 3, 1),
+    intArrayOf(5, 5, 5, 4, 4, 2),
+    intArrayOf(5, 5, 5, 5, 4, 3),
+    intArrayOf(5, 5, 5, 5, 5, 4),
+    intArrayOf(5, 5, 5, 5, 5, 5)
+)
+
 fun pf1RangerBaseSpellSlots(level: Int): Map<Int, Int> = when (level) {
     in 1..3 -> emptyMap()
     4 -> mapOf(1 to 0)
@@ -286,6 +366,107 @@ fun pf1RangerBaseSpellSlots(level: Int): Map<Int, Int> = when (level) {
     19 -> mapOf(1 to 4, 2 to 3, 3 to 3, 4 to 2)
     else -> mapOf(1 to 4, 2 to 4, 3 to 3, 4 to 3)
 }
+
+fun pf1BaseSpellSlots(className: String, level: Int): Map<Int, Int> {
+    val safeLevel = level.coerceIn(1, 20)
+    return when (className.trim().lowercase()) {
+        "wizard", "cleric", "druid" ->
+            indexedSlots(pf1FullPreparedSpellSlots[safeLevel])
+        "sorcerer" ->
+            indexedSlots(pf1SorcererSpellSlots[safeLevel], firstSpellLevel = 1)
+        "bard" ->
+            indexedSlots(pf1BardSpellSlots[safeLevel], firstSpellLevel = 1)
+        "paladin", "ranger" -> pf1RangerBaseSpellSlots(safeLevel)
+        else -> emptyMap()
+    }
+}
+
+fun pf1SpellSlotsForClass(
+    className: String,
+    level: Int,
+    castingAbilityScore: Int
+): Map<Int, Int> =
+    pf1BaseSpellSlots(className, level).mapValues { (spellLevel, base) ->
+        if (spellLevel == 0) {
+            base
+        } else {
+            base + pf1BonusSpells(castingAbilityScore, spellLevel)
+        }
+    }
+
+fun pf1DomainSpellSlots(className: String, level: Int): Map<Int, Int> {
+    if (!className.equals("Cleric", true)) return emptyMap()
+    return pf1BaseSpellSlots(className, level)
+        .filterKeys { it > 0 }
+        .mapValues { 1 }
+}
+
+private val pf1SorcererSpellsKnown = listOf(
+    intArrayOf(),
+    intArrayOf(4, 2),
+    intArrayOf(5, 2),
+    intArrayOf(5, 3),
+    intArrayOf(6, 3, 1),
+    intArrayOf(6, 4, 2),
+    intArrayOf(7, 4, 2, 1),
+    intArrayOf(7, 5, 3, 2),
+    intArrayOf(8, 5, 3, 2, 1),
+    intArrayOf(8, 5, 4, 3, 2),
+    intArrayOf(9, 5, 4, 3, 2, 1),
+    intArrayOf(9, 5, 5, 4, 3, 2),
+    intArrayOf(9, 5, 5, 4, 3, 2, 1),
+    intArrayOf(9, 5, 5, 4, 4, 3, 2),
+    intArrayOf(9, 5, 5, 4, 4, 3, 2, 1),
+    intArrayOf(9, 5, 5, 4, 4, 4, 3, 2),
+    intArrayOf(9, 5, 5, 4, 4, 4, 3, 2, 1),
+    intArrayOf(9, 5, 5, 4, 4, 4, 3, 3, 2),
+    intArrayOf(9, 5, 5, 4, 4, 4, 3, 3, 2, 1),
+    intArrayOf(9, 5, 5, 4, 4, 4, 3, 3, 3, 2),
+    intArrayOf(9, 5, 5, 4, 4, 4, 3, 3, 3, 3)
+)
+
+private val pf1BardSpellsKnown = listOf(
+    intArrayOf(),
+    intArrayOf(4, 2),
+    intArrayOf(5, 3),
+    intArrayOf(6, 4),
+    intArrayOf(6, 4, 2),
+    intArrayOf(6, 4, 3),
+    intArrayOf(6, 4, 4),
+    intArrayOf(6, 5, 4, 2),
+    intArrayOf(6, 5, 4, 3),
+    intArrayOf(6, 5, 4, 4),
+    intArrayOf(6, 5, 5, 4, 2),
+    intArrayOf(6, 6, 5, 4, 3),
+    intArrayOf(6, 6, 5, 4, 4),
+    intArrayOf(6, 6, 5, 5, 4, 2),
+    intArrayOf(6, 6, 6, 5, 4, 3),
+    intArrayOf(6, 6, 6, 5, 4, 4),
+    intArrayOf(6, 6, 6, 5, 5, 4, 2),
+    intArrayOf(6, 6, 6, 6, 5, 4, 3),
+    intArrayOf(6, 6, 6, 6, 5, 4, 4),
+    intArrayOf(6, 6, 6, 6, 5, 5, 4),
+    intArrayOf(6, 6, 6, 6, 6, 5, 5)
+)
+
+fun pf1SpellsKnownLimit(
+    className: String,
+    level: Int
+): Map<Int, Int>? {
+    val safeLevel = level.coerceIn(1, 20)
+    return when (className.trim().lowercase()) {
+        "sorcerer" -> indexedSlots(pf1SorcererSpellsKnown[safeLevel])
+        "bard" -> indexedSlots(pf1BardSpellsKnown[safeLevel])
+        else -> null
+    }
+}
+
+fun pf1CastingType(className: String): String =
+    when (className.trim().lowercase()) {
+        "sorcerer", "bard" -> "Spontaneous"
+        "wizard", "cleric", "druid", "paladin", "ranger" -> "Prepared"
+        else -> ""
+    }
 
 fun pf1BonusSpells(abilityScore: Int, spellLevel: Int): Int {
     if (spellLevel <= 0) return 0
@@ -347,13 +528,18 @@ object Pf1CharacterMigration {
         val rangerLevel = classLevels.entries
             .firstOrNull { it.key.equals("Ranger", true) }
             ?.value ?: 0
-        val slots = if (rangerLevel > 0 && character.spellSlots.isEmpty()) {
-            pf1RangerBaseSpellSlots(rangerLevel).mapValues { (spellLevel, base) ->
-                base + pf1BonusSpells(
-                    character.abilities[Ability.WIS] ?: 10,
-                    spellLevel
-                )
-            }
+        val castingProfile = pf1ClassProfile(character.className)
+        val castingAbility = castingProfile?.castingAbility
+        val classLevel = classLevels[character.className] ?: character.level
+        val slots = if (
+            castingAbility != null &&
+            character.spellSlots.isEmpty()
+        ) {
+            pf1SpellSlotsForClass(
+                character.className,
+                classLevel,
+                character.abilities[castingAbility] ?: 10
+            )
         } else {
             character.spellSlots
         }
@@ -389,6 +575,9 @@ object Pf1CharacterMigration {
             skillFeats = emptyList(),
             bonusFeats = mappedBonusFeats,
             spellSlots = slots,
+            castingType = pf1CastingType(character.className),
+            spellcastingAbility = castingProfile?.castingAbility
+                ?: character.spellcastingAbility,
             focusCurrent = 0,
             focusMax = 0
         )
