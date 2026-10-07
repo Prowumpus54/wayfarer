@@ -22,6 +22,19 @@ enum class ChallengeStatus {
     FAILED
 }
 
+enum class CombatActorType {
+    PLAYER,
+    CREATURE
+}
+
+data class CombatTurnEntry(
+    val actorType: CombatActorType,
+    val actorId: String,
+    val name: String,
+    val initiative: Int,
+    val initiativeBonus: Int
+)
+
 data class EncounterCreatureState(
     val id: String = UUID.randomUUID().toString(),
     val name: String,
@@ -30,6 +43,14 @@ data class EncounterCreatureState(
     val currentHp: Int = maxHp,
     val armorClass: Int,
     val initiative: Int? = null,
+    val initiativeBonus: Int = 0,
+    val attackName: String = "",
+    val attackBonus: Int? = null,
+    val damageDice: String = "",
+    val damageType: String = "",
+    val fortitude: Int = 0,
+    val reflex: Int = 0,
+    val will: Int = 0,
     val xpValue: Int = 0,
     val conditions: List<String> = emptyList(),
     val status: CreatureStatus = CreatureStatus.ACTIVE,
@@ -42,6 +63,8 @@ data class EncounterState(
     val location: String,
     val sourceEncounterId: String = "",
     val round: Int = 1,
+    val initiativeOrder: List<CombatTurnEntry> = emptyList(),
+    val currentTurnIndex: Int = 0,
     val creatures: List<EncounterCreatureState> = emptyList(),
     val loot: List<InventoryItem> = emptyList(),
     val lootCp: Int = 0,
@@ -72,6 +95,9 @@ data class CampaignRuntimeState(
 enum class GmEffectType(val wireName: String) {
     START_ENCOUNTER("start_encounter"),
     SPAWN_CREATURE("spawn_creature"),
+    START_INITIATIVE("start_initiative"),
+    ADVANCE_TURN("advance_turn"),
+    CREATURE_STRIKE("creature_strike"),
     DAMAGE_CHARACTER("damage_character"),
     HEAL_CHARACTER("heal_character"),
     DAMAGE_CREATURE("damage_creature"),
@@ -133,7 +159,9 @@ object GameStateEngine {
         character: CharacterState,
         runtime: CampaignRuntimeState,
         effects: List<GmEffect>,
-        location: String
+        location: String,
+        ruleset: String = "pf2e-adapted",
+        creatureResolver: (String) -> CreatureCombatProfile? = { null }
     ): GameStateApplication {
         var nextCharacter = character
         var nextRuntime = runtime
@@ -160,10 +188,20 @@ object GameStateEngine {
                 GmEffectType.SPAWN_CREATURE -> {
                     val quantity = effect.quantity.coerceIn(1, 12)
                     val requestedName = effect.name.ifBlank { effect.ruleRef.ifBlank { "Creature" } }
-                    val suppliedStats = effect.maxHp > 0 && effect.armorClass > 0
-                    val maxHp = effect.maxHp.takeIf { it > 0 }?.coerceIn(1, 9999) ?: 1
-                    val ac = effect.armorClass.takeIf { it > 0 }?.coerceIn(1, 99) ?: 10
-                    val xp = effect.xpValue.coerceIn(0, 1_000_000)
+                    val profile = creatureResolver(
+                        effect.ruleRef.ifBlank { requestedName }
+                    ) ?: creatureResolver(requestedName)
+                    val maxHp = profile?.maxHp
+                        ?: effect.maxHp.takeIf { it > 0 }?.coerceIn(1, 9999)
+                        ?: 1
+                    val ac = profile?.armorClass
+                        ?: effect.armorClass.takeIf { it > 0 }?.coerceIn(1, 99)
+                        ?: 10
+                    val xp = if (profile != null && ruleset.lowercase().contains("pf2")) {
+                        pf2CreatureXp(profile.level, nextCharacter.level)
+                    } else {
+                        effect.xpValue.coerceIn(0, 1_000_000)
+                    }
                     var encounter = nextRuntime.activeEncounter
                     if (encounter == null || encounter.status != EncounterStatus.ACTIVE) {
                         encounter = EncounterState(
@@ -171,9 +209,11 @@ object GameStateEngine {
                             location = location
                         )
                     }
+                    val canonicalName = profile?.name ?: requestedName
                     val existingCount = encounter.creatures.count {
-                        it.name.equals(requestedName, true)
+                        it.name.substringBefore(" #").equals(canonicalName, true)
                     }
+                    val primaryAttack = profile?.primaryAttack
                     val spawned = List(quantity) { index ->
                         val suffix = if (quantity > 1 || existingCount > 0) {
                             " #" + (existingCount + index + 1)
@@ -181,24 +221,90 @@ object GameStateEngine {
                             ""
                         }
                         EncounterCreatureState(
-                            name = requestedName + suffix,
-                            ruleRef = effect.ruleRef,
+                            name = canonicalName + suffix,
+                            ruleRef = profile?.ruleRef ?: effect.ruleRef,
                             maxHp = maxHp,
                             currentHp = maxHp,
                             armorClass = ac,
+                            initiativeBonus = profile?.initiativeBonus ?: 0,
+                            attackName = primaryAttack?.name.orEmpty(),
+                            attackBonus = primaryAttack?.attackBonus,
+                            damageDice = primaryAttack?.damageDice.orEmpty(),
+                            damageType = primaryAttack?.damageType.orEmpty(),
+                            fortitude = profile?.fortitude ?: 0,
+                            reflex = profile?.reflex ?: 0,
+                            will = profile?.will ?: 0,
                             xpValue = xp,
-                            statsResolved = suppliedStats
+                            statsResolved = profile != null
                         )
                     }
                     encounter = encounter.copy(creatures = encounter.creatures + spawned)
                     nextRuntime = nextRuntime.copy(activeEncounter = encounter)
                     events += GameEvent(
                         "Creatures entered",
-                        quantity.toString() + " × " + requestedName +
-                            if (suppliedStats) " added to the encounter." else
-                                " added with unresolved placeholder stats.",
+                        quantity.toString() + " × " + canonicalName +
+                            if (profile != null) {
+                                " loaded from the rules database."
+                            } else {
+                                " added with unresolved placeholder stats."
+                            },
                         "encounter"
                     )
+                }
+
+                GmEffectType.START_INITIATIVE -> {
+                    val encounter = nextRuntime.activeEncounter
+                    if (encounter != null && encounter.status == EncounterStatus.ACTIVE) {
+                        val started = CombatRulesEngine.startInitiative(
+                            nextCharacter,
+                            encounter,
+                            ruleset
+                        )
+                        if (started != encounter) {
+                            nextRuntime = nextRuntime.copy(activeEncounter = started)
+                            events += GameEvent(
+                                "Initiative",
+                                started.initiativeOrder.joinToString(" • ") {
+                                    it.name + " " + it.initiative
+                                },
+                                "encounter"
+                            )
+                        }
+                    }
+                }
+
+                GmEffectType.ADVANCE_TURN -> {
+                    val encounter = nextRuntime.activeEncounter
+                    if (encounter != null && encounter.initiativeOrder.isNotEmpty()) {
+                        nextRuntime = nextRuntime.copy(
+                            activeEncounter = CombatRulesEngine.advanceTurn(encounter)
+                        )
+                    }
+                }
+
+                GmEffectType.CREATURE_STRIKE -> {
+                    val encounter = nextRuntime.activeEncounter
+                    if (encounter != null) {
+                        val source = effect.name.ifBlank { effect.target }
+                        val resolved = CombatRulesEngine.resolveCreatureStrike(
+                            nextCharacter,
+                            encounter,
+                            source,
+                            ruleset
+                        )
+                        nextCharacter = resolved.character
+                        nextRuntime = nextRuntime.copy(
+                            activeEncounter = resolved.encounter
+                        )
+                        events += resolved.events
+                        if (resolved.events.isEmpty()) {
+                            events += GameEvent(
+                                "Enemy action blocked",
+                                resolved.summary,
+                                "encounter"
+                            )
+                        }
+                    }
                 }
 
                 GmEffectType.DAMAGE_CHARACTER -> {
@@ -579,12 +685,24 @@ object GameStateEngine {
         val lines = mutableListOf<String>()
         runtime.activeEncounter?.let { encounter ->
             lines += "Encounter: " + encounter.name + " [" + encounter.status.name + "] round " + encounter.round
+            if (encounter.initiativeOrder.isNotEmpty()) {
+                val current = encounter.initiativeOrder.getOrNull(encounter.currentTurnIndex)
+                lines += "Initiative: " + encounter.initiativeOrder.joinToString(" > ") {
+                    it.name + " " + it.initiative
+                }
+                current?.let { lines += "Current turn: " + it.name }
+            }
             encounter.creatures.forEach { creature ->
                 lines += creature.name + ": HP " + creature.currentHp + "/" + creature.maxHp +
                     ", AC " + creature.armorClass + ", status " + creature.status.name +
                     if (creature.conditions.isEmpty()) "" else
                         ", conditions " + creature.conditions.joinToString(", ") +
-                    if (creature.statsResolved) "" else " [stats unresolved]"
+                    if (creature.statsResolved) {
+                        if (creature.attackBonus != null) {
+                            ", attack " + creature.attackName + " +" + creature.attackBonus +
+                                ", damage " + creature.damageDice
+                        } else ""
+                    } else " [stats unresolved]"
             }
             if (encounter.loot.isNotEmpty()) {
                 lines += "Encounter loot: " + encounter.loot.joinToString("; ") {
@@ -602,6 +720,20 @@ object GameStateEngine {
         }
         return lines
     }
+
+    private fun pf2CreatureXp(creatureLevel: Int, partyLevel: Int): Int =
+        when (creatureLevel - partyLevel) {
+            -4 -> 10
+            -3 -> 15
+            -2 -> 20
+            -1 -> 30
+            0 -> 40
+            1 -> 60
+            2 -> 80
+            3 -> 120
+            4 -> 160
+            else -> 0
+        }
 
     private fun awardEncounterXp(application: GameStateApplication): GameStateApplication {
         val encounter = application.runtime.activeEncounter ?: return application
