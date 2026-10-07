@@ -257,8 +257,16 @@ fun PlayScreen(
                     JevCombatPolicy.route(it).route == JevRoute.ANDROID_RULES
                 }
 
+                val localPf1Maneuver =
+                    GameRuleset.fromWire(ruleset) == GameRuleset.PF1E &&
+                    listOf("grapple", "trip", "bull rush", "shove", "disarm")
+                        .any { clean.contains(it, true) }
+
                 if (
-                    fastIntent?.actionType == JevActionType.STRIKE &&
+                    (
+                        fastIntent?.actionType == JevActionType.STRIKE ||
+                            localPf1Maneuver
+                        ) &&
                     rollForAction == null &&
                     deferredSpellEffect == null
                 ) {
@@ -297,35 +305,36 @@ fun PlayScreen(
                         }
                     }
 
-                    var combat = CombatRulesEngine.resolvePlayerStrike(
-                        character = stagedCharacter,
-                        runtime = stagedRuntime,
-                        selectedTargetId = selectedTargetId,
-                        actionText = clean,
-                        ruleset = ruleset
-                    )
+                    fun resolveBoundedAction(): CombatMechanicalResolution =
+                        if (localPf1Maneuver) {
+                            CombatRulesEngine.resolvePlayerManeuver(
+                                character = stagedCharacter,
+                                runtime = stagedRuntime,
+                                selectedTargetId = selectedTargetId,
+                                actionText = clean,
+                                ruleset = ruleset
+                            )
+                        } else {
+                            CombatRulesEngine.resolvePlayerStrike(
+                                character = stagedCharacter,
+                                runtime = stagedRuntime,
+                                selectedTargetId = selectedTargetId,
+                                actionText = clean,
+                                ruleset = ruleset
+                            )
+                        }
+
+                    var combat = resolveBoundedAction()
 
                     if (combat.status == CombatResolutionStatus.NEED_INITIATIVE) {
                         val initiativeApp = onStateEffects(combat.effects)
                         stagedCharacter = initiativeApp.character
                         stagedRuntime = initiativeApp.runtime
                         runEnemyTurns()
-                        combat = CombatRulesEngine.resolvePlayerStrike(
-                            character = stagedCharacter,
-                            runtime = stagedRuntime,
-                            selectedTargetId = selectedTargetId,
-                            actionText = clean,
-                            ruleset = ruleset
-                        )
+                        combat = resolveBoundedAction()
                     } else if (combat.status == CombatResolutionStatus.NOT_PLAYER_TURN) {
                         runEnemyTurns()
-                        combat = CombatRulesEngine.resolvePlayerStrike(
-                            character = stagedCharacter,
-                            runtime = stagedRuntime,
-                            selectedTargetId = selectedTargetId,
-                            actionText = clean,
-                            ruleset = ruleset
-                        )
+                        combat = resolveBoundedAction()
                     }
 
                     when (combat.status) {
@@ -442,7 +451,20 @@ fun PlayScreen(
         val baseModifier = character.modifierForCheck(request.name) ?: return
         val modifier = baseModifier + request.modifierAdjustment
         val isNewRoll = check == null
-        val result = retainCheckOnRetry(check) { DiceEngine.d20(modifier, request.dc) }
+        val result = retainCheckOnRetry(check) {
+            if (GameRuleset.fromWire(ruleset) == GameRuleset.PF1E) {
+                val isSavingThrow = request.name.equals("Fortitude", true) ||
+                    request.name.equals("Reflex", true) ||
+                    request.name.equals("Will", true)
+                DiceEngine.pf1Check(
+                    modifier = modifier,
+                    dc = request.dc,
+                    automaticOnNatural = isSavingThrow
+                )
+            } else {
+                DiceEngine.d20(modifier, request.dc)
+            }
+        }
         check = result
         checkName = request.name
         if (isNewRoll) onDiceRoll(
@@ -949,36 +971,66 @@ private fun CharacterActionsDrawer(
                         }
                     }
                 }
-                item {
-                    ActionDrawerRow(
-                        "🛡 Defend / Raise Shield",
-                        "AC " + character.ac() +
-                            " • prepare for incoming attacks"
+                if (character.isPf1()) {
+                    val meleeWeapon = melee
+                    if (
+                        meleeWeapon != null &&
+                        character.iterativeAttackBonuses(meleeWeapon).size > 1
                     ) {
-                        onAction("I defend myself and Raise a Shield if possible.")
+                        item {
+                            ActionDrawerRow(
+                                "⚔ Full Attack — " + meleeWeapon.name,
+                                character.iterativeAttackBonuses(meleeWeapon)
+                                    .joinToString("/") { signed(it) }
+                            ) {
+                                onAction(
+                                    "I make a Full Attack with my " +
+                                        meleeWeapon.name + "."
+                                )
+                            }
+                        }
                     }
-                }
 
-                val athletics = skillDefinitions.first {
-                    it.name == "Athletics"
-                }
-                val athleticsBonus = character.skillBonus(athletics)
-
-                item {
-                    ActionDrawerRow(
-                        "🤼 Grapple",
-                        "Athletics " + signed(athleticsBonus)
-                    ) {
-                        onAction("I attempt to Grapple my target.")
+                    item {
+                        ActionDrawerRow(
+                            "🛡 Fight Defensively",
+                            "PF1 option • AC " + character.ac() +
+                                " • tactical modifiers adjudicated by rules/GM"
+                        ) {
+                            onAction("I fight defensively.")
+                        }
                     }
-                }
 
-                item {
-                    ActionDrawerRow(
-                        "↔ Shove / Trip",
-                        "Athletics " + signed(athleticsBonus)
-                    ) {
-                        onAction("I attempt a Shove or Trip against my target.")
+                    item {
+                        ActionDrawerRow(
+                            "🤼 Grapple",
+                            "CMB " + signed(character.cmb()) +
+                                " vs target CMD"
+                        ) {
+                            onAction("I attempt to Grapple my target.")
+                        }
+                    }
+
+                    item {
+                        ActionDrawerRow(
+                            "↔ Bull Rush / Trip",
+                            "CMB " + signed(character.cmb()) +
+                                " vs target CMD"
+                        ) {
+                            onAction("I attempt to Trip my target.")
+                        }
+                    }
+                } else {
+                    item {
+                        ActionDrawerRow(
+                            "🛡 Defend / Raise Shield",
+                            "AC " + character.ac() +
+                                " • prepare for incoming attacks"
+                        ) {
+                            onAction(
+                                "I defend myself and Raise a Shield if possible."
+                            )
+                        }
                     }
                 }
 
@@ -1018,7 +1070,11 @@ private fun CharacterActionsDrawer(
                         ActionDrawerRow(
                             "✨ " + spell,
                             if (level == 0) {
-                                "Cantrip"
+                                if (character.isPf1()) {
+                                    "0-level spell • not expended"
+                                } else {
+                                    "Cantrip"
+                                }
                             } else {
                                 "Spell level " + level
                             }
