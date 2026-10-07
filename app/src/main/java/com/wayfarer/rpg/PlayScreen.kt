@@ -38,11 +38,12 @@ fun PlayScreen(
     currentLocation: String,
     sceneContext: ModuleSceneContext?,
     runtimeState: CampaignRuntimeState,
+    ruleset: String,
     onAction: (String) -> Unit,
     onDiceRoll: (String) -> Unit,
     recentEvents: List<GameEvent>,
     onGmReply: (String) -> Unit,
-    onStateEffects: (List<GmEffect>) -> Unit,
+    onStateEffects: (List<GmEffect>) -> GameStateApplication,
     onXpAward: (Int) -> Unit
 ) {
     var input by session.input
@@ -66,6 +67,7 @@ fun PlayScreen(
     var pendingCheck by session.pendingCheck
     var pendingContext by session.pendingContext
     var pendingActionEffects by session.pendingActionEffects
+    var selectedTargetId by session.selectedTargetId
     var gmDiceModifiers by session.gmDiceModifiers
 
     val context = LocalContext.current
@@ -384,7 +386,11 @@ fun PlayScreen(
             }
         }
         if (runtimeState.activeEncounter != null || runtimeState.activeChallenge != null) {
-            RuntimeStateCard(runtimeState)
+            RuntimeStateCard(
+                state = runtimeState,
+                selectedTargetId = selectedTargetId,
+                onSelectTarget = { selectedTargetId = it }
+            )
             Spacer(Modifier.height(6.dp))
         } else {
             Spacer(Modifier.height(8.dp))
@@ -435,7 +441,12 @@ fun PlayScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 val conversation = recentEvents
-                    .filter { it.type == "action" || it.type == "roll" || it.type == "gm" }
+                    .filter {
+                        it.type in setOf(
+                            "action", "roll", "gm", "state", "encounter",
+                            "loot", "challenge", "resource", "world", "xp"
+                        )
+                    }
                     .take(30)
                 if (conversation.isEmpty()) {
                     item {
