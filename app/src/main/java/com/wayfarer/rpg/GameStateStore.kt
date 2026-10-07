@@ -50,6 +50,14 @@ class GameStateStore(
                     .put("currentHp", creature.currentHp)
                     .put("armorClass", creature.armorClass)
                     .put("initiative", creature.initiative)
+                    .put("initiativeBonus", creature.initiativeBonus)
+                    .put("attackName", creature.attackName)
+                    .put("attackBonus", creature.attackBonus)
+                    .put("damageDice", creature.damageDice)
+                    .put("damageType", creature.damageType)
+                    .put("fortitude", creature.fortitude)
+                    .put("reflex", creature.reflex)
+                    .put("will", creature.will)
                     .put("xpValue", creature.xpValue)
                     .put("conditions", JSONArray(creature.conditions))
                     .put("status", creature.status.name)
@@ -71,12 +79,26 @@ class GameStateStore(
             )
         }
 
+        val initiative = JSONArray()
+        value.initiativeOrder.forEach { turn ->
+            initiative.put(
+                JSONObject()
+                    .put("actorType", turn.actorType.name)
+                    .put("actorId", turn.actorId)
+                    .put("name", turn.name)
+                    .put("initiative", turn.initiative)
+                    .put("initiativeBonus", turn.initiativeBonus)
+            )
+        }
+
         return JSONObject()
             .put("id", value.id)
             .put("name", value.name)
             .put("location", value.location)
             .put("sourceEncounterId", value.sourceEncounterId)
             .put("round", value.round)
+            .put("initiativeOrder", initiative)
+            .put("currentTurnIndex", value.currentTurnIndex)
             .put("creatures", creatures)
             .put("loot", loot)
             .put("lootCp", value.lootCp)
@@ -108,6 +130,15 @@ class GameStateStore(
                                 .coerceIn(1, 99),
                             initiative = if (item.isNull("initiative")) null
                                 else item.optInt("initiative"),
+                            initiativeBonus = item.optInt("initiativeBonus", 0),
+                            attackName = item.optString("attackName"),
+                            attackBonus = if (item.isNull("attackBonus")) null
+                                else item.optInt("attackBonus"),
+                            damageDice = item.optString("damageDice"),
+                            damageType = item.optString("damageType"),
+                            fortitude = item.optInt("fortitude", 0),
+                            reflex = item.optInt("reflex", 0),
+                            will = item.optInt("will", 0),
                             xpValue = item.optInt("xpValue", 0).coerceAtLeast(0),
                             conditions = stringList(item.optJSONArray("conditions")),
                             status = enumValue(
@@ -141,6 +172,27 @@ class GameStateStore(
             }
         }
 
+        val initiativeJson = json.optJSONArray("initiativeOrder")
+        val initiativeOrder = buildList {
+            if (initiativeJson != null) {
+                for (index in 0 until initiativeJson.length()) {
+                    val item = initiativeJson.optJSONObject(index) ?: continue
+                    add(
+                        CombatTurnEntry(
+                            actorType = enumValue(
+                                item.optString("actorType"),
+                                CombatActorType.CREATURE
+                            ),
+                            actorId = item.optString("actorId"),
+                            name = item.optString("name"),
+                            initiative = item.optInt("initiative", 0),
+                            initiativeBonus = item.optInt("initiativeBonus", 0)
+                        )
+                    )
+                }
+            }
+        }
+
         return EncounterState(
             id = json.optString("id").ifBlank {
                 java.util.UUID.randomUUID().toString()
@@ -149,6 +201,9 @@ class GameStateStore(
             location = json.optString("location"),
             sourceEncounterId = json.optString("sourceEncounterId"),
             round = json.optInt("round", 1).coerceAtLeast(1),
+            initiativeOrder = initiativeOrder,
+            currentTurnIndex = json.optInt("currentTurnIndex", 0)
+                .coerceIn(0, (initiativeOrder.size - 1).coerceAtLeast(0)),
             creatures = creatures,
             loot = loot,
             lootCp = json.optInt("lootCp", 0).coerceAtLeast(0),
