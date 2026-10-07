@@ -30,7 +30,9 @@ object CombatRulesEngine {
         runtime: CampaignRuntimeState,
         selectedTargetId: String?,
         actionText: String,
-        ruleset: String
+        ruleset: String,
+        d20Roller: (Int, Int) -> CheckResult = DiceEngine::d20,
+        damageRoller: (String) -> DiceRollResult? = DiceEngine::rollNotation
     ): CombatMechanicalResolution {
         if (!isPf2Adapted(ruleset)) {
             return CombatMechanicalResolution(
@@ -86,7 +88,7 @@ object CombatRulesEngine {
 
         val weapon = resolveWeapon(character, actionText)
         val attackBonus = character.attackBonus(weapon)
-        val attack = DiceEngine.d20(attackBonus, target.armorClass)
+        val attack = d20Roller(attackBonus, target.armorClass)
 
         val damageModifier = if (
             weapon.name.equals(character.meleeWeapon, true)
@@ -100,7 +102,7 @@ object CombatRulesEngine {
             attack.degree == Degree.SUCCESS ||
             attack.degree == Degree.CRITICAL_SUCCESS
         ) {
-            DiceEngine.rollNotation(damageExpression)
+            damageRoller(damageExpression)
         } else null
         val multiplier = if (attack.degree == Degree.CRITICAL_SUCCESS) 2 else 1
         val damage = (damageRoll?.total ?: 0) * multiplier
@@ -149,13 +151,16 @@ object CombatRulesEngine {
     fun startInitiative(
         character: CharacterState,
         encounter: EncounterState,
-        ruleset: String
+        ruleset: String,
+        initiativeRoller: (Int) -> DiceRollResult = {
+            DiceEngine.roll(20, modifier = it)
+        }
     ): EncounterState {
         if (encounter.initiativeOrder.isNotEmpty()) return encounter
         if (!isPf2Adapted(ruleset)) return encounter
 
         val order = mutableListOf<CombatTurnEntry>()
-        val playerRoll = DiceEngine.roll(20, modifier = character.perception())
+        val playerRoll = initiativeRoller(character.perception())
         order += CombatTurnEntry(
             actorType = CombatActorType.PLAYER,
             actorId = "player",
@@ -167,7 +172,7 @@ object CombatRulesEngine {
         encounter.creatures
             .filter { it.status == CreatureStatus.ACTIVE && it.currentHp > 0 }
             .forEach { creature ->
-                val roll = DiceEngine.roll(20, modifier = creature.initiativeBonus)
+                val roll = initiativeRoller(creature.initiativeBonus)
                 order += CombatTurnEntry(
                     actorType = CombatActorType.CREATURE,
                     actorId = creature.id,
@@ -216,7 +221,9 @@ object CombatRulesEngine {
         character: CharacterState,
         encounter: EncounterState,
         creatureNameOrId: String,
-        ruleset: String
+        ruleset: String,
+        d20Roller: (Int, Int) -> CheckResult = DiceEngine::d20,
+        damageRoller: (String) -> DiceRollResult? = DiceEngine::rollNotation
     ): CreatureTurnResolution {
         if (!isPf2Adapted(ruleset)) {
             return CreatureTurnResolution(
@@ -265,11 +272,11 @@ object CombatRulesEngine {
             )
         }
 
-        val attack = DiceEngine.d20(creature.attackBonus, character.ac())
+        val attack = d20Roller(creature.attackBonus, character.ac())
         val damageRoll = if (
             attack.degree == Degree.SUCCESS ||
             attack.degree == Degree.CRITICAL_SUCCESS
-        ) DiceEngine.rollNotation(creature.damageDice) else null
+        ) damageRoller(creature.damageDice) else null
         val multiplier = if (attack.degree == Degree.CRITICAL_SUCCESS) 2 else 1
         val damage = (damageRoll?.total ?: 0) * multiplier
 
