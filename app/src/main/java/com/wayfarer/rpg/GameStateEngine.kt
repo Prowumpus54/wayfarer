@@ -80,6 +80,7 @@ enum class GmEffectType(val wireName: String) {
     TAKE_LOOT("take_loot"),
     ADD_ITEM("add_item"),
     ADD_CURRENCY("add_currency"),
+    SPEND_SPELL_SLOT("spend_spell_slot"),
     APPLY_CONDITION("apply_condition"),
     REMOVE_CONDITION("remove_condition"),
     SET_FLAG("set_flag"),
@@ -370,6 +371,46 @@ object GameStateEngine {
                                 else -> nextCharacter
                             }
                         }
+                    }
+                }
+
+                GmEffectType.SPEND_SPELL_SLOT -> {
+                    val spellName = effect.name.trim()
+                    val updated = if (spellName.isNotBlank()) {
+                        consumeSpell(nextCharacter, spellName)
+                    } else if (effect.level == -2) {
+                        if (nextCharacter.focusCurrent > 0) {
+                            nextCharacter.copy(focusCurrent = nextCharacter.focusCurrent - 1)
+                        } else null
+                    } else if (effect.level > 0) {
+                        val maximum = nextCharacter.spellSlots[effect.level] ?: 0
+                        val used = nextCharacter.spellSlotsUsed[effect.level] ?: 0
+                        if (used < maximum) {
+                            nextCharacter.copy(
+                                spellSlotsUsed = nextCharacter.spellSlotsUsed +
+                                    (effect.level to used + 1)
+                            )
+                        } else null
+                    } else nextCharacter
+                    if (updated != null) {
+                        nextCharacter = updated
+                        if (spellName.isNotBlank()) {
+                            events += GameEvent(
+                                "Spell cast",
+                                nextCharacter.characterName + " cast " + spellName + ".",
+                                "resource"
+                            )
+                        }
+                    } else {
+                        events += GameEvent(
+                            "Spell resource unavailable",
+                            if (spellName.isBlank()) {
+                                "No spell resource remained for the requested cast."
+                            } else {
+                                spellName + " could not be cast because no matching resource remained."
+                            },
+                            "resource"
+                        )
                     }
                 }
 
