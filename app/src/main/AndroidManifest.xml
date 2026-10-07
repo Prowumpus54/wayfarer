@@ -1,12 +1,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="Wayfarer"
-        android:icon="@drawable/ic_wayfarer"
-        android:roundIcon="@drawable/ic_wayfarer"
+        android:label="LoreWise"
+        android:icon="@drawable/ic_lorewise"
+        android:roundIcon="@drawable/ic_lorewise"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:allowBackup="false"
-        android:usesCleartextTraffic="true"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:usesCleartextTraffic="${usesCleartextTraffic}"
         android:supportsRtl="true">
         <activity
             android:name=".MainActivity"

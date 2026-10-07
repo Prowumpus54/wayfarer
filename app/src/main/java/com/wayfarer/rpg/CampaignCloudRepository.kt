@@ -16,6 +16,10 @@ class CampaignCloudRepository(
         onSuccess: (List<CampaignProfile>) -> Unit,
         onFailure: (String) -> Unit
     ) {
+        val started = System.nanoTime()
+        val correlationId = LoreWiseDiagnostics.record(
+            "cloud", "load_campaigns", DiagnosticStatus.INFO
+        )
         db.collection("users").document(user.uid)
             .collection("campaigns")
             .get()
@@ -31,9 +35,20 @@ class CampaignCloudRepository(
                         joined = doc.getBoolean("joined") ?: false
                     )
                 }.sortedBy { it.name.lowercase() }
+                LoreWiseDiagnostics.record(
+                    "cloud", "load_campaigns", DiagnosticStatus.OK,
+                    durationMs = (System.nanoTime() - started) / 1_000_000,
+                    detail = "count=${profiles.size}",
+                    correlationId = correlationId
+                )
                 onSuccess(profiles)
             }
-            .addOnFailureListener {
+            .addOnFailureListener { error ->
+                LoreWiseDiagnostics.error(
+                    "cloud", "load_campaigns", error,
+                    (System.nanoTime() - started) / 1_000_000,
+                    correlationId
+                )
                 onFailure("Could not load your game worlds.")
             }
     }
@@ -45,6 +60,11 @@ class CampaignCloudRepository(
         onSuccess: (CampaignProfile) -> Unit,
         onFailure: (String) -> Unit
     ) {
+        val started = System.nanoTime()
+        val correlationId = LoreWiseDiagnostics.record(
+            "cloud", "create_campaign", DiagnosticStatus.INFO,
+            detail = "module=${moduleId.take(40)}"
+        )
         val campaignRef = db.collection("campaigns").document()
         val campaignId = campaignRef.id
         val inviteCode = inviteCode()
@@ -87,10 +107,21 @@ class CampaignCloudRepository(
                 db.collection("inviteCodes").document(inviteCode),
                 inviteData
             )
-        }.addOnSuccessListener { onSuccess(profile) }
-            .addOnFailureListener {
-                onFailure("Could not create the game world.")
-            }
+        }.addOnSuccessListener {
+            LoreWiseDiagnostics.record(
+                "cloud", "create_campaign", DiagnosticStatus.OK,
+                durationMs = (System.nanoTime() - started) / 1_000_000,
+                correlationId = correlationId
+            )
+            onSuccess(profile)
+        }.addOnFailureListener { error ->
+            LoreWiseDiagnostics.error(
+                "cloud", "create_campaign", error,
+                (System.nanoTime() - started) / 1_000_000,
+                correlationId
+            )
+            onFailure("Could not create the game world.")
+        }
     }
     fun joinCampaign(
         user: FirebaseUser,
@@ -100,21 +131,45 @@ class CampaignCloudRepository(
     ) {
         val code = rawCode.trim().uppercase()
         if (code.length < 6) {
+            LoreWiseDiagnostics.record(
+                "cloud", "check_invite", DiagnosticStatus.WARN,
+                detail = "invalid code length"
+            )
             onFailure("Enter the full invite code.")
             return
         }
 
+        val started = System.nanoTime()
+        val correlationId = LoreWiseDiagnostics.record(
+            "cloud", "check_invite", DiagnosticStatus.INFO
+        )
         db.collection("inviteCodes").document(code).get()
             .addOnSuccessListener { invite ->
                 val campaignId = invite.getString("campaignId")
                 val active = invite.getBoolean("active") ?: false
                 if (campaignId.isNullOrBlank() || !active) {
+                    LoreWiseDiagnostics.record(
+                        "cloud", "check_invite", DiagnosticStatus.WARN,
+                        durationMs = (System.nanoTime() - started) / 1_000_000,
+                        detail = "inactive or unresolved",
+                        correlationId = correlationId
+                    )
                     onFailure("That invite code is not active.")
                     return@addOnSuccessListener
                 }
+                LoreWiseDiagnostics.record(
+                    "cloud", "check_invite", DiagnosticStatus.OK,
+                    durationMs = (System.nanoTime() - started) / 1_000_000,
+                    correlationId = correlationId
+                )
                 loadCampaignForJoin(user, campaignId, onSuccess, onFailure)
             }
-            .addOnFailureListener {
+            .addOnFailureListener { error ->
+                LoreWiseDiagnostics.error(
+                    "cloud", "check_invite", error,
+                    (System.nanoTime() - started) / 1_000_000,
+                    correlationId
+                )
                 onFailure("Invite code could not be checked.")
             }
     }
@@ -124,6 +179,10 @@ class CampaignCloudRepository(
         onSuccess: (CampaignProfile) -> Unit,
         onFailure: (String) -> Unit
     ) {
+        val started = System.nanoTime()
+        val correlationId = LoreWiseDiagnostics.record(
+            "cloud", "load_invited_campaign", DiagnosticStatus.INFO
+        )
         val campaignRef = db.collection("campaigns").document(campaignId)
         campaignRef.get().addOnSuccessListener { doc ->
             if (!doc.exists()) {
@@ -138,8 +197,18 @@ class CampaignCloudRepository(
                 inviteCode = doc.getString("inviteCode"),
                 joined = true
             )
+            LoreWiseDiagnostics.record(
+                "cloud", "load_invited_campaign", DiagnosticStatus.OK,
+                durationMs = (System.nanoTime() - started) / 1_000_000,
+                correlationId = correlationId
+            )
             joinBatch(user, campaignRef, profile, onSuccess, onFailure)
-        }.addOnFailureListener {
+        }.addOnFailureListener { error ->
+            LoreWiseDiagnostics.error(
+                "cloud", "load_invited_campaign", error,
+                (System.nanoTime() - started) / 1_000_000,
+                correlationId
+            )
             onFailure("Could not open the invited game world.")
         }
     }
@@ -151,6 +220,10 @@ class CampaignCloudRepository(
         onSuccess: (CampaignProfile) -> Unit,
         onFailure: (String) -> Unit
     ) {
+        val started = System.nanoTime()
+        val correlationId = LoreWiseDiagnostics.record(
+            "cloud", "join_campaign", DiagnosticStatus.INFO
+        )
         db.runBatch { batch ->
             batch.set(
                 campaignRef.collection("members").document(user.uid),
@@ -161,10 +234,21 @@ class CampaignCloudRepository(
                     .collection("campaigns").document(profile.id),
                 pointerData(profile)
             )
-        }.addOnSuccessListener { onSuccess(profile) }
-            .addOnFailureListener {
-                onFailure("Could not join the game world.")
-            }
+        }.addOnSuccessListener {
+            LoreWiseDiagnostics.record(
+                "cloud", "join_campaign", DiagnosticStatus.OK,
+                durationMs = (System.nanoTime() - started) / 1_000_000,
+                correlationId = correlationId
+            )
+            onSuccess(profile)
+        }.addOnFailureListener { error ->
+            LoreWiseDiagnostics.error(
+                "cloud", "join_campaign", error,
+                (System.nanoTime() - started) / 1_000_000,
+                correlationId
+            )
+            onFailure("Could not join the game world.")
+        }
     }
     private fun memberData(user: FirebaseUser, role: String) =
         hashMapOf<String, Any?>(

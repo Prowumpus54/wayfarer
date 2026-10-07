@@ -59,7 +59,7 @@ enum class GmModelChoice(
     val shortName: String
 ) {
     AUTO("Auto (recommended)", "Auto"),
-    LOCAL("Local Qwen 3.5 9B", "Local"),
+    LOCAL("Local Gemma 4 E2B", "Local"),
     LOCAL_FAST("Local Qwen 3.5 4B", "Local Fast"),
     FLASH("Gemini 3.8 Flash", "3.8 Flash"),
     FLASH_LITE("Gemini 3.5 Flash Lite", "3.5 Flash Lite")
@@ -235,7 +235,7 @@ Return JSON only:
         val character = context.character
         val route = JevCombatPolicy.route(intent)
         return """
-You are Wayfarer's immediate combat game master.
+You are LoreWise's immediate combat game master.
 Be concise and resolve only the declared action.
 
 Android is authoritative for all dice and rules calculations.
@@ -281,7 +281,7 @@ Request only one check when one is actually needed.
         val character = context.character
 
         return """
-You are Wayfarer's immediate tabletop game master.
+You are LoreWise's immediate tabletop game master.
 Be concise, atmospheric, fair, and responsive to player intent.
 
 CRITICAL RULE:
@@ -343,38 +343,65 @@ WEAPONS: ${character.meleeWeapon}; ${character.rangedWeapon}
             try {
                 return generateLocal(prompt, "gm")
             } catch (error: Exception) {
-                Log.e("WayfarerGM", "local GM failed; falling back to Gemini: ${error.message}", error)
+                Log.w("LoreWiseGM", "Local GM unavailable; trying cloud fallback.")
             }
         }
         var lastError: Exception? = null
 
         for (modelName in modelNames) {
             repeat(2) { attempt ->
+                val started = System.nanoTime()
+                val correlationId = LoreWiseDiagnostics.record(
+                    "ai", "gm_cloud", DiagnosticStatus.INFO,
+                    detail = "model=$modelName attempt=${attempt + 1}"
+                )
                 try {
                     val model = Firebase
                         .ai(backend = GenerativeBackend.googleAI())
                         .generativeModel(modelName)
                     val text = model.generateContent(prompt).text.orEmpty()
+                    LoreWiseDiagnostics.record(
+                        "ai", "gm_cloud", DiagnosticStatus.OK,
+                        durationMs = elapsedMs(started),
+                        detail = "model=$modelName",
+                        correlationId = correlationId
+                    )
                     return text to modelName
                 } catch (error: Exception) {
                     lastError = error
-                    Log.e(
-                        "WayfarerGM",
-                        "generate failed model=$modelName attempt=${attempt + 1} type=${error::class.java.name} message=${error.message}",
-                        error
+                    val retryable = isTransient(error)
+                    LoreWiseDiagnostics.record(
+                        "ai", "gm_cloud",
+                        if (retryable) DiagnosticStatus.RETRY else DiagnosticStatus.ERROR,
+                        durationMs = elapsedMs(started),
+                        detail = "model=$modelName ${error::class.java.simpleName}",
+                        correlationId = correlationId
                     )
-                    if (!isTransient(error)) throw error
+                    if (!retryable) throw error
                     if (attempt == 0) delay(900)
                 }
             }
         }
-
-        throw lastError ?: IllegalStateException("No Gemini model responded.")
+        throw lastError ?: IllegalStateException("No cloud GM model responded.")
     }
 
-    private suspend fun generateLocal(prompt: String, profile: String): Pair<String, String> = withContext(Dispatchers.IO) {
+    private suspend fun generateLocal(
+        prompt: String,
+        profile: String
+    ): Pair<String, String> = withContext(Dispatchers.IO) {
+        val started = System.nanoTime()
+        val correlationId = LoreWiseDiagnostics.record(
+            "ai", "gm_local", DiagnosticStatus.INFO,
+            detail = "profile=$profile"
+        )
         val base = BuildConfig.LOCAL_LLM_URL.trimEnd('/')
-        if (base.isBlank()) throw IOException("Local LLM URL is not configured")
+        if (base.isBlank()) {
+            val error = IOException("Local LLM URL is not configured")
+            LoreWiseDiagnostics.error(
+                "ai", "gm_local", error, elapsedMs(started), correlationId
+            )
+            throw error
+        }
         val connection = (URL("$base/v1/chat").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             connectTimeout = 5000
@@ -383,17 +410,49 @@ WEAPONS: ${character.meleeWeapon}; ${character.rangedWeapon}
             setRequestProperty("Content-Type", "application/json")
             setRequestProperty("Authorization", "Bearer ${BuildConfig.LOCAL_LLM_TOKEN}")
         }
-        val body = JSONObject().put("profile", profile).put("prompt", prompt).toString()
-        connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-        val code = connection.responseCode
-        val stream = if (code in 200..299) connection.inputStream else connection.errorStream
-        val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-        if (code !in 200..299) throw IOException("Local LLM HTTP $code: ${raw.take(240)}")
-        val json = JSONObject(raw)
-        val text = json.optString("text")
-        if (text.isBlank()) throw IOException("Local LLM returned an empty response")
-        text to ("local:" + json.optString("model", profile))
+        try {
+            val body = JSONObject()
+                .put("profile", profile)
+                .put("prompt", prompt)
+                .toString()
+            connection.outputStream.use {
+                it.write(body.toByteArray(Charsets.UTF_8))
+            }
+            val code = connection.responseCode
+            val stream = if (code in 200..299) {
+                connection.inputStream
+            } else {
+                connection.errorStream
+            }
+            val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            if (code !in 200..299) {
+                throw IOException("Local LLM HTTP $code")
+            }
+            val json = JSONObject(raw)
+            val text = json.optString("text")
+            if (text.isBlank()) {
+                throw IOException("Local LLM returned an empty response")
+            }
+            val model = json.optString("model", profile)
+            LoreWiseDiagnostics.record(
+                "ai", "gm_local", DiagnosticStatus.OK,
+                durationMs = elapsedMs(started),
+                detail = "profile=$profile model=$model",
+                correlationId = correlationId
+            )
+            text to ("local:" + model)
+        } catch (error: Exception) {
+            LoreWiseDiagnostics.error(
+                "ai", "gm_local", error, elapsedMs(started), correlationId
+            )
+            throw error
+        } finally {
+            connection.disconnect()
+        }
     }
+
+    private fun elapsedMs(startedNanos: Long): Long =
+        (System.nanoTime() - startedNanos) / 1_000_000
 
     private fun isTransient(error: Exception): Boolean {
         val message = (error.message ?: error.toString()).lowercase()

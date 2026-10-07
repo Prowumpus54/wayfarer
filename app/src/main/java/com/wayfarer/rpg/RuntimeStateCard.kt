@@ -13,9 +13,9 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun RuntimeStateCard(
     state: CampaignRuntimeState,
+    modifier: Modifier = Modifier,
     selectedTargetId: String? = null,
-    onSelectTarget: (String) -> Unit = {},
-    modifier: Modifier = Modifier
+    onSelectTarget: (String) -> Unit = {}
 ) {
     val encounter = state.activeEncounter
     val challenge = state.activeChallenge

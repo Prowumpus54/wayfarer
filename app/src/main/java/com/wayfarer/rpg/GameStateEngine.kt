@@ -166,7 +166,7 @@ object GameStateEngine {
         runtime: CampaignRuntimeState,
         effects: List<GmEffect>,
         location: String,
-        ruleset: String = "pf2e-adapted",
+        ruleset: String = character.ruleset,
         creatureResolver: (String) -> CreatureCombatProfile? = { null }
     ): GameStateApplication {
         var nextCharacter = character

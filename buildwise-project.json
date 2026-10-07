@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "standardVersion": "1.0.0",
+  "project": {
+    "name": "LoreWise",
+    "slug": "lorewise",
+    "role": "wise-app",
+    "platform": "android",
+    "packageId": "com.wayfarer.rpg",
+    "defaultStableBranch": "main",
+    "integrationBranch": "develop",
+    "activeBranch": "integration/lorewise-wise-standard"
+  },
+  "documentation": {
+    "startHere": "docs/INDEX.md",
+    "aiContext": "docs/AI_CONTEXT.md",
+    "currentState": "docs/CURRENT_STATE.md",
+    "project": "docs/PROJECT.md",
+    "architecture": "docs/ARCHITECTURE.md",
+    "dataModel": "docs/DATA_MODEL.md",
+    "integrations": "docs/INTEGRATIONS.md",
+    "ui": "docs/UI_SPEC.md",
+    "diagnostics": "docs/DIAGNOSTICS.md",
+    "knownIssues": "docs/KNOWN_ISSUES.md",
+    "testMatrix": "docs/TEST_MATRIX.md",
+    "releaseChecklist": "docs/RELEASE_CHECKLIST.md",
+    "decisions": "docs/DECISIONS.md",
+    "changelog": "docs/CHANGELOG.md",
+    "roadmap": "docs/ROADMAP.md"
+  },
+  "diagnostics": {
+    "standard": "wise-diagnostics",
+    "localEventLimit": 1000,
+    "platformLogTag": "LoreWiseDiag",
+    "implementation": [
+      "app/src/main/java/com/wayfarer/rpg/Diagnostics.kt",
+      "app/src/main/java/com/wayfarer/rpg/DiagnosticsScreen.kt"
+    ]
+  },
+  "verification": {
+    "primaryCommand": ".\\gradlew.bat testDebugUnitTest lintDebug assembleDebug assembleRelease",
+    "statusDocument": "docs/CURRENT_STATE.md"
+  },
+  "wiseCore": {
+    "enabled": false,
+    "adoptedModules": [],
+    "localPrototypeCandidates": [
+      "diagnostics"
+    ]
+  }
+}

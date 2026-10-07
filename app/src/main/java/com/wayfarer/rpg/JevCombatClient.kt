@@ -34,6 +34,10 @@ class JevCombatClient(
     suspend fun classify(input: JevCombatInput): JevCombatDecision {
         require(configured) { "Jev proxy endpoint is not configured." }
         val token = firebaseIdToken()
+        val started = System.nanoTime()
+        val correlationId = LoreWiseDiagnostics.record(
+            "network", "jev_classify", DiagnosticStatus.INFO
+        )
         val actor = JSONObject()
             .put("name", input.actorName)
             .put("weapon", input.weapon)
@@ -50,7 +54,8 @@ class JevCombatClient(
             .put("scene", input.scene.take(400))
             .toString()
 
-        return withContext(Dispatchers.IO) {
+        return try {
+            withContext(Dispatchers.IO) {
             val connection = (
                 URL(endpoint).openConnection() as HttpURLConnection
                 ).apply {
@@ -89,6 +94,21 @@ class JevCombatClient(
             } finally {
                 connection.disconnect()
             }
+        }.also { decision ->
+            LoreWiseDiagnostics.record(
+                "network", "jev_classify", DiagnosticStatus.OK,
+                durationMs = (System.nanoTime() - started) / 1_000_000,
+                detail = "route=${decision.suggestedRoute ?: "unknown"}",
+                correlationId = correlationId
+            )
+        }
+        } catch (error: Exception) {
+            LoreWiseDiagnostics.error(
+                "network", "jev_classify", error,
+                (System.nanoTime() - started) / 1_000_000,
+                correlationId
+            )
+            throw error
         }
     }
 

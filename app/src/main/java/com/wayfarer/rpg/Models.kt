@@ -469,7 +469,8 @@ enum class AppScreen(val label: String, val glyph: String) {
     Map("Map", "▱"),
     Journal("Journal", "▤"),
     Glossary("Glossary", "⌕"),
-    Party("Party", "♟")
+    Party("Party", "♟"),
+    Diagnostics("Diagnostics", "⚙")
 }
 
 fun starterCharacters(): List<CharacterState> =

@@ -11,26 +11,39 @@ import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import com.google.firebase.appcheck.FirebaseAppCheck
-import com.google.firebase.appcheck.debug.DebugAppCheckProviderFactory
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        FirebaseAppCheck.getInstance().installAppCheckProviderFactory(
-            DebugAppCheckProviderFactory.getInstance()
+        LoreWiseDiagnostics.initialize(applicationContext)
+        LoreWiseDiagnostics.record(
+            "app",
+            "startup",
+            DiagnosticStatus.INFO,
+            detail = "MainActivity created"
+        )
+        FirebaseAppCheck.getInstance()
+            .installAppCheckProviderFactory(
+                loreWiseAppCheckProviderFactory()
+            )
+        LoreWiseDiagnostics.record(
+            "security",
+            "app_check_provider",
+            DiagnosticStatus.OK,
+            detail = if (BuildConfig.DEBUG) "debug" else "play_integrity"
         )
 
         setContent {
-            WayfarerTheme {
-                WayfarerApp()
+            LoreWiseTheme {
+                LoreWiseApp()
             }
         }
     }
 }
 
 @Composable
-fun WayfarerApp() {
+fun LoreWiseApp() {
     val appContext = LocalContext.current.applicationContext
     val moduleId = "sunless_citadel"
     val moduleRepo = remember { AdventureModuleRepository(appContext) }
@@ -234,7 +247,7 @@ fun WayfarerApp() {
     Scaffold(
         containerColor = Bg,
         topBar = {
-            WayfarerHeader(
+            LoreWiseHeader(
                 current = current,
                 onSelect = { current = it },
                 onProfileClick = { showCampaignHub = true }
@@ -354,6 +367,10 @@ fun WayfarerApp() {
                 onSelectMember = { selectedMember = it },
                 character = characters[selectedMember],
                 onCharacterChange = ::updateSelected
+            )
+
+            AppScreen.Diagnostics -> DiagnosticsScreen(
+                modifier = contentModifier
             )
         }
         }

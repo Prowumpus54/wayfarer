@@ -497,7 +497,7 @@ private fun CoreSheet(
                 traditions = emptyList(),
                 description = weapon.damageDice + " " + weapon.damageType +
                     ". " + weapon.category + " weapon. " + weapon.traits,
-                sourceTitle = "Wayfarer local rules",
+                sourceTitle = "LoreWise local rules",
                 remaster = true
             )
         }
@@ -1127,7 +1127,7 @@ private fun InventoryAiDialog(
                     .verticalScroll(rememberScrollState())
             ) {
                 Text(
-                    "Tell Wayfarer what you want. It will propose a new pack before changing anything.",
+                    "Tell LoreWise what you want. It will propose a new pack before changing anything.",
                     color = Muted,
                     fontSize = 12.sp
                 )

@@ -1,4 +1,4 @@
-WAYFARER MODULE SOURCE: THE SUNLESS CITADEL
+LOREWISE MODULE SOURCE: THE SUNLESS CITADEL
 
 Place the adventure source file in this folder.
 Preferred source: a PDF copy you own or otherwise have access to.

@@ -250,7 +250,7 @@ fun PlayScreen(
                     } else {
                         "Jev unavailable • Gemini fallback"
                     }
-                    gmStatus = "Gemini adjudicating…"
+                    gmStatus = "GM adjudicating…"
                 }
 
                 val fastIntent = jevDecision?.takeIf {
@@ -425,19 +425,19 @@ fun PlayScreen(
                     val effects = turn.effects + listOfNotNull(deferredSpellEffect)
                     if (effects.isNotEmpty()) onStateEffects(effects)
                     pendingActionEffects = emptyList()
-                    gmStatus = "Gemini " + turn.modelName.removePrefix("gemini-")
+                    gmStatus = gmModelStatus(turn.modelName)
                     if (turn.xpAward > 0) onXpAward(turn.xpAward)
                 }
                 gmNarration?.let(onGmReply)
                 if (pendingRoll == rollForAction) pendingRoll = null
             } catch (cancel: CancellationException) { throw cancel
             } catch (error: Exception) {
-                Log.e("WayfarerGM", "adjudicate failed type=${error::class.java.name} message=${error.message}", error)
+                Log.e("LoreWiseGM", "adjudicate failed type=${error::class.java.name} message=${error.message}", error)
                 failedAction = clean
                 gmStatus = "GM error • " + (error.message ?: error::class.java.simpleName).take(90)
                 gmNarration =
-                    "Gemini is temporarily unavailable. Wayfarer will retry the primary model " +
-                    "and automatically fall back to a lighter Gemini model. You can retry this action."
+                    "The selected GM is temporarily unavailable. LoreWise kept your action " +
+                    "so you can retry without losing the recorded intent or dice."
             } finally {
                 gmBusy = false
             }
@@ -483,14 +483,14 @@ fun PlayScreen(
                 if (effects.isNotEmpty()) onStateEffects(effects)
                 gmNarration?.let(onGmReply)
                 if (resolved.xpAward > 0) onXpAward(resolved.xpAward)
-                gmStatus = "Gemini " + resolved.modelName.removePrefix("gemini-")
+                gmStatus = gmModelStatus(resolved.modelName)
                 pendingCheck = null
                 pendingContext = null
                 pendingActionEffects = emptyList()
                 openPanel = null
             } catch (cancel: CancellationException) { throw cancel
             } catch (error: Exception) {
-                Log.e("WayfarerGM", "resolve failed type=${error::class.java.name} message=${error.message}", error)
+                Log.e("LoreWiseGM", "resolve failed type=${error::class.java.name} message=${error.message}", error)
                 gmStatus = "GM error • " + (error.message ?: error::class.java.simpleName).take(90)
             } finally {
                 gmBusy = false
@@ -585,7 +585,13 @@ fun PlayScreen(
                 }
                 Text(
                     gmStatus,
-                    color = if (gmStatus.startsWith("Gemini")) Green else Muted,
+                    color = when {
+                        gmStatus.startsWith("GM error") -> Danger
+                        gmStatus.contains("Gemini") ||
+                            gmStatus.contains("Local") ||
+                            gmStatus.startsWith("Rules resolved") -> Green
+                        else -> Muted
+                    },
                     fontSize = 10.sp
                 )
             }
@@ -805,7 +811,7 @@ fun PlayScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        "Auto retries temporary failures and falls back to the lighter Gemini model.",
+                        "Auto uses local Gemma first when configured, then falls back to Gemini.",
                         color = Muted,
                         fontSize = 12.sp
                     )
@@ -835,7 +841,7 @@ fun PlayScreen(
                                 Text(choice.displayName, color = Text)
                                 if (choice == GmModelChoice.AUTO) {
                                     Text(
-                                        "3.8 Flash → 3.5 Flash Lite",
+                                        "Local Gemma → Gemini 3.8 Flash → 3.5 Flash Lite",
                                         color = Muted,
                                         fontSize = 10.sp
                                     )
@@ -853,6 +859,15 @@ fun PlayScreen(
             containerColor = Surface
         )
     }
+}
+
+private fun gmModelStatus(modelName: String): String = when {
+    modelName.startsWith("local:") ->
+        "Local " + modelName.removePrefix("local:")
+    modelName.startsWith("gemini-") ->
+        "Gemini " + modelName.removePrefix("gemini-")
+    modelName.isBlank() -> "GM ready"
+    else -> "GM " + modelName
 }
 
 @Composable

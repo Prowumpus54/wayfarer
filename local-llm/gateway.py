@@ -3,19 +3,19 @@ import os
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-HOST = os.environ.get("WAYFARER_LLM_HOST", "0.0.0.0")
-PORT = int(os.environ.get("WAYFARER_LLM_PORT", "11435"))
-TOKEN = os.environ.get("WAYFARER_LLM_TOKEN", "")
+HOST = os.environ.get("LOREWISE_LLM_HOST", os.environ.get("WAYFARER_LLM_HOST", "0.0.0.0"))
+PORT = int(os.environ.get("LOREWISE_LLM_PORT", os.environ.get("WAYFARER_LLM_PORT", "11435")))
+TOKEN = os.environ.get("LOREWISE_LLM_TOKEN", os.environ.get("WAYFARER_LLM_TOKEN", ""))
 OLLAMA = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
 
 PROFILES = {
-    "gm": "qwen3.5:9b",
+    "gm": "gemma4:e2b-it-qat",
     "fast": "wayfarer-gm-fast:latest",
     "coder": "local-coder:latest",
 }
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "WayfarerLocalLLM/0.1"
+    server_version = "LoreWiseLocalLLM/0.2"
 
     def _json(self, status, payload):
         body = json.dumps(payload).encode("utf-8")
@@ -68,7 +68,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     if not TOKEN:
-        raise SystemExit("WAYFARER_LLM_TOKEN is required")
-    print(f"Wayfarer local LLM gateway listening on {HOST}:{PORT}")
+        raise SystemExit("LOREWISE_LLM_TOKEN (or legacy WAYFARER_LLM_TOKEN) is required")
+    print(f"LoreWise local LLM gateway listening on {HOST}:{PORT}")
     print("Profiles:", PROFILES)
     ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()

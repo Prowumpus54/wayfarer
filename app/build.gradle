@@ -9,6 +9,9 @@ def localProps = new Properties()
 def localPropsFile = rootProject.file('local.properties')
 if (localPropsFile.exists()) localPropsFile.withInputStream { localProps.load(it) }
 
+def localLlmUrl = localProps.getProperty('LOREWISE_LOCAL_LLM_URL', localProps.getProperty('WAYFARER_LOCAL_LLM_URL', ''))
+def localLlmToken = localProps.getProperty('LOREWISE_LOCAL_LLM_TOKEN', localProps.getProperty('WAYFARER_LOCAL_LLM_TOKEN', ''))
+
 android {
     namespace 'com.wayfarer.rpg'
     compileSdk 36
@@ -17,12 +20,20 @@ android {
         applicationId 'com.wayfarer.rpg'
         minSdk 26
         targetSdk 36
-        versionCode 16
-        versionName '0.12.2'
-        buildConfigField 'String', 'LOCAL_LLM_URL', '"' + localProps.getProperty('WAYFARER_LOCAL_LLM_URL', '') + '"'
-        buildConfigField 'String', 'LOCAL_LLM_TOKEN', '"' + localProps.getProperty('WAYFARER_LOCAL_LLM_TOKEN', '') + '"'
+        versionCode 17
+        versionName '0.13.0'
+        buildConfigField 'String', 'LOCAL_LLM_URL', '"' + localLlmUrl + '"'
+        buildConfigField 'String', 'LOCAL_LLM_TOKEN', '"' + localLlmToken + '"'
     }
 
+    buildTypes {
+        debug {
+            manifestPlaceholders = [usesCleartextTraffic: "true"]
+        }
+        release {
+            manifestPlaceholders = [usesCleartextTraffic: "false"]
+        }
+    }
     buildFeatures {
         compose true
         buildConfig true
@@ -39,9 +50,9 @@ dependencies {
     implementation platform('com.google.firebase:firebase-bom:34.19.0')
     implementation 'com.google.firebase:firebase-auth'
     implementation 'com.google.firebase:firebase-firestore'
-    implementation 'com.google.firebase:firebase-storage'
     implementation 'com.google.firebase:firebase-ai'
-    implementation 'com.google.firebase:firebase-appcheck-debug'
+    debugImplementation 'com.google.firebase:firebase-appcheck-debug'
+    implementation 'com.google.firebase:firebase-appcheck-playintegrity'
     implementation 'androidx.activity:activity-compose:1.10.1'
     implementation 'androidx.compose.ui:ui'
     implementation 'androidx.compose.ui:ui-tooling-preview'

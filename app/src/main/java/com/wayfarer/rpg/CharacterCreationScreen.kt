@@ -68,7 +68,7 @@ fun CharacterCreationScreen(
             }
         }
         Text(
-            "Describe the hero you want to play. Wayfarer will handle the rules, feats, spells and starting equipment.",
+            "Describe the hero you want to play. LoreWise will handle the rules, feats, spells and starting equipment.",
             color = Muted
         )
 
@@ -149,7 +149,7 @@ fun CharacterCreationScreen(
                         )
                     } catch (t: Throwable) {
                         error = t.message
-                            ?: "Wayfarer could not build the character."
+                            ?: "LoreWise could not build the character."
                     } finally {
                         busy = false
                     }

@@ -23,7 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 @Composable
-fun WayfarerHeader(
+fun LoreWiseHeader(
     current: AppScreen,
     onSelect: (AppScreen) -> Unit,
     onProfileClick: () -> Unit = {}
@@ -75,7 +75,7 @@ fun WayfarerHeader(
                 }
                 HorizontalDivider(color = GoldDark)
                 Text(
-                    "Wayfarer v" + BuildConfig.VERSION_NAME,
+                    "LoreWise v" + BuildConfig.VERSION_NAME,
                     color = Muted,
                     fontSize = 11.sp,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
@@ -85,7 +85,7 @@ fun WayfarerHeader(
         Text("✥", color = Gold, fontSize = 30.sp)
         Spacer(Modifier.width(8.dp))
         Column(Modifier.weight(1f)) {
-            Text("Wayfarer", color = Text, fontSize = 30.sp, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold)
+            Text("LoreWise", color = Text, fontSize = 30.sp, fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold)
             Text("STORIES AWAIT", color = Green, fontSize = 9.sp, letterSpacing = 3.sp)
         }
         Box(
@@ -101,7 +101,7 @@ fun WayfarerHeader(
 }
 
 @Composable
-fun WayfarerBottomBar(current: AppScreen, onSelect: (AppScreen) -> Unit) {
+fun LoreWiseBottomBar(current: AppScreen, onSelect: (AppScreen) -> Unit) {
     NavigationBar(containerColor = Surface, tonalElevation = 0.dp) {
         AppScreen.entries.forEach { screen ->
             val selected = current == screen

@@ -1,5 +1,6 @@
 package com.wayfarer.rpg
 
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 
 class PlaySession {
@@ -11,7 +12,7 @@ class PlaySession {
     val gmStatus = mutableStateOf("Ready")
     val gmBusy = mutableStateOf(false)
     val failedAction = mutableStateOf<String?>(null)
-    val selectedDie = mutableStateOf(20)
+    val selectedDie = mutableIntStateOf(20)
     val diceCountText = mutableStateOf("1")
     val manualModifierText = mutableStateOf("0")
     val manualRoll = mutableStateOf<DiceRollResult?>(null)

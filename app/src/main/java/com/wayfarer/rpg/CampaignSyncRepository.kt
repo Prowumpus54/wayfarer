@@ -23,9 +23,27 @@ class CampaignSyncRepository(
             "displayName" to (user.displayName ?: "Player"),
             "createdAt" to FieldValue.serverTimestamp()
         )
+        val started = System.nanoTime()
+        val correlationId = LoreWiseDiagnostics.record(
+            "sync", "publish_event", DiagnosticStatus.INFO
+        )
         db.collection("campaigns").document(campaignId)
             .collection("events").document(event.id)
             .set(data)
+            .addOnSuccessListener {
+                LoreWiseDiagnostics.record(
+                    "sync", "publish_event", DiagnosticStatus.OK,
+                    durationMs = (System.nanoTime() - started) / 1_000_000,
+                    correlationId = correlationId
+                )
+            }
+            .addOnFailureListener { error ->
+                LoreWiseDiagnostics.error(
+                    "sync", "publish_event", error,
+                    (System.nanoTime() - started) / 1_000_000,
+                    correlationId
+                )
+            }
     }
 
     fun listenEvents(
@@ -39,6 +57,9 @@ class CampaignSyncRepository(
             .limit(50)
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
+                    LoreWiseDiagnostics.error(
+                        "sync", "listen_events", error
+                    )
                     onError("Campaign sync is temporarily unavailable.")
                     return@addSnapshotListener
                 }
@@ -52,6 +73,10 @@ class CampaignSyncRepository(
                         id = doc.id
                     )
                 }
+                LoreWiseDiagnostics.record(
+                    "sync", "listen_events", DiagnosticStatus.OK,
+                    detail = "count=${events.size}"
+                )
                 onEvents(events)
             }
     }

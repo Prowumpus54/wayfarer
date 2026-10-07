@@ -353,7 +353,7 @@ class AdventureModuleRepository(
                 id = json.getString("id"),
                 title = json.getString("title"),
                 version = json.optString("version", "1"),
-                ruleset = json.optString("ruleset", "pf2e"),
+                ruleset = json.optString("ruleset", GameRuleset.PF1E.wireName),
                 description = json.optString("description"),
                 startingLocation = json.optString("startingLocation"),
                 minLevel = json.optInt("minLevel", 1),

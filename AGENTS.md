@@ -1,4 +1,4 @@
-# Working in Wayfarer
+# Working in LoreWise
 
 - Read README and the relevant docs. Distinguish source observations from intended requirements and tested behavior.
 - Preserve `com.wayfarer.rpg`, Firebase settings/rules, signing configuration, saved data and Gradle paths. Keep `app/` in place.

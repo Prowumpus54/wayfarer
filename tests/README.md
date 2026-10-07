@@ -1,7 +1,11 @@
-# Validation
+# Tests
 
-Executable Android unit tests stay in `app/src/test/java/com/wayfarer/rpg/`. `JevCombatPolicyTest` checks four routing cases: confident bounded action routes locally; confident GM route, low confidence and creative probability escalate. These tests were inspected, not run during repository setup.
+Executable Android unit tests live under `app/src/test/java/com/wayfarer/rpg/`.
 
-Run `./gradlew.bat :app:testDebugUnitTest :app:lintDebug :app:assembleDebug` from the root with Java/SDK/Firebase configuration available. Use this directory for future cross-component plans and curated fixtures; moving executable tests here requires Gradle changes.
+The current suite covers character action validation, authoritative combat, creature profile parsing/catalog resolution, runtime game-state effects, Jev routing, PF1 combat, and PF1 character/caster progression.
 
-Before release verify roll preservation, character-dependent panels, assistant validation before save, persistence compatibility and Firestore boundaries. Record local checks separately from emulator/device and live cloud evidence.
+Primary automated gate:
+
+`gradlew.bat testDebugUnitTest lintDebug assembleDebug`
+
+See `docs/TEST_MATRIX.md` for release-candidate verification and `docs/CURRENT_STATE.md` for the latest results.

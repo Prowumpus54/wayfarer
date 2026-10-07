@@ -1,13 +1,19 @@
-# Decisions and artifact review
+# Engineering decisions
 
-Keep the root and existing app module intact. Add top-level knowledge documents and tests guidance; executable Android tests stay in their Gradle source set. main is for stable/released milestones, develop for integration, feature/* for bounded work. Do not invent identity/history/tags or configure a remote without authorization.
+## Preserve installed identity during product rename
+LoreWise keeps Android package `com.wayfarer.rpg`, Firebase project identity, legacy `wayfarer_*` preferences/databases, and compatible filesystem paths. Reason: a cosmetic rename must not orphan installed data or break cloud identity. A future rename requires an explicit migration.
 
-Product requirements: preserve player-generated dice rolls; character-driven Skills/Spells/Attacks/Actions/Inventory; rules-engine validation before saving assistant-created actions. Implementation differences are documented in Product and UI specification.
+## PF1 is the primary authoritative ruleset
+Character defaults, bundled Sunless Citadel runtime behavior, PF1 creature profiles, and local combat resolution target Pathfinder 1e. PF2 assets remain legacy/reference-only.
 
-Ignore caches/build outputs, local SDK/IDE settings, credential/signing files, logs, temporary files, backup/release directories and local Tesseract installation. All remain on disk. Existing root XML hierarchy captures are individually ignored; root PNGs are individually excluded as apparent diagnostic captures pending curation. No blanket XML/PNG/JSON/SQLite/JAR ignore is used, so resources, module maps, fixtures, bundled databases and Gradle wrapper remain eligible.
+## Android owns mechanics
+AI is not trusted to roll dice or commit authoritative combat/resource values. Structured effects are validated/applied by the app.
 
-`data-source/pf2e/` contains its own .git directory. Preserve it; decide explicitly between external source, submodule or vendoring before staging. Its revision could not be queried under the sandbox account because Git reported different ownership; no safe.directory exception was added.
+## Local-first GM routing
+Auto mode prefers the configured local Gemma GM, then falls back to Gemini cloud models. The fast legacy local profile remains available separately.
 
-`jev-smoke.json`, `modules/source/SunlessCitadel/`, and `modules/built/` remain unignored pending review of content, provenance, size, possible personal information and rebuild needs. Do not delete them. Record the source revision and required inputs when the import policy is settled.
+## Release security differs from debug convenience
+Debug may use cleartext LAN access and App Check debug provider. Release disables cleartext and uses Play Integrity.
 
-`app/google-services.json` is excluded conservatively as locally provisioned configuration, although Firebase client configuration is not generally a private service-account key. Retain its local contents unchanged. Ignore rules are not proof that all possible secrets have been found.
+## Diagnostics are a local prototype for WiseCore
+LoreWise currently owns the diagnostics implementation locally. Promote it to WiseCore only after behavior stabilizes across multiple Wise apps.

@@ -28,7 +28,7 @@ class CharacterArchitect {
         return parseCharacter(raw, brief)
     }
     private fun buildPrompt(brief: CharacterBrief): String = """
-You are Wayfarer's character architect.
+You are LoreWise's character architect.
 
 Create one easy-to-play Pathfinder 1e level 1 hero using a core class.
 Favor the player's fantasy over optimization. The app will recompute BAB, saves,
@@ -100,13 +100,33 @@ Rules:
         var last: Exception? = null
         for (modelName in modelNames) {
             repeat(2) { attempt ->
+                val started = System.nanoTime()
+                val correlationId = LoreWiseDiagnostics.record(
+                    "ai", "character_architect", DiagnosticStatus.INFO,
+                    detail = "model=$modelName attempt=${attempt + 1}"
+                )
                 try {
                     val model = Firebase
                         .ai(backend = GenerativeBackend.googleAI())
                         .generativeModel(modelName)
-                    return model.generateContent(prompt).text.orEmpty()
+                    val result = model.generateContent(prompt).text.orEmpty()
+                    LoreWiseDiagnostics.record(
+                        "ai", "character_architect", DiagnosticStatus.OK,
+                        durationMs = (System.nanoTime() - started) / 1_000_000,
+                        detail = "model=$modelName",
+                        correlationId = correlationId
+                    )
+                    return result
                 } catch (error: Exception) {
                     last = error
+                    LoreWiseDiagnostics.record(
+                        "ai", "character_architect",
+                        if (attempt == 0) DiagnosticStatus.RETRY
+                        else DiagnosticStatus.ERROR,
+                        durationMs = (System.nanoTime() - started) / 1_000_000,
+                        detail = "model=$modelName ${error::class.java.simpleName}",
+                        correlationId = correlationId
+                    )
                     if (attempt == 0) delay(700)
                 }
             }

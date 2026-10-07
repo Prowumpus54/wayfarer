@@ -33,7 +33,7 @@ private val Colors = darkColorScheme(
 )
 
 @Composable
-fun WayfarerTheme(content: @Composable () -> Unit) {
+fun LoreWiseTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = Colors,
         typography = MaterialTheme.typography.copy(

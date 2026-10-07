@@ -1,11 +1,23 @@
 # UI specification
 
-`AppScreen` declares Home, Play, Map, Journal, Glossary and Party. Additional source implements character creation/sheets, inventory and campaign hub.
+LoreWise uses a dark fantasy visual system with explicit safe-area handling and predictable primary navigation.
 
-The current Play rail is fixed: Actions, Skills, Items, Spells, Dice. Attacks are inside Actions. Actions use selected weapons, general actions and character feats; Skills use character bonuses; Items reads inventory; Spells reads rank-grouped character spells and shows an empty state.
+## Primary navigation
 
-The intended design is character-driven dynamic Skills, Spells, Attacks, Actions and Inventory tabs. Contents must follow the active character. Exact visibility/layout and placement of the current Dice panel remain to be specified. Do not describe the target as already complete.
+The header/hamburger exposes Home, Play, Map, Journal, Glossary, Party, and Diagnostics. Product-visible naming is LoreWise. The package/storage compatibility name is never shown as the product brand.
 
-Player rolls must remain authoritative through GM adjudication. Assistant-action validation failures should explain required corrections before save.
+## System bars
 
-Proposed acceptance checks: switch characters with different weapons/spells; test a noncaster; update inventory; preserve an explicit roll through GM response; reject an illegal generated action before persistence. These are not recorded passes.
+Top-level content must use system-bar-safe layout behavior. No title, menu control, or bottom interaction target may overlap Android status/navigation UI.
+
+## Play
+
+Play shows campaign/location context, Game Master status, recent events, runtime encounter/challenge state, character actions, dice, and bounded side panels. Model status must distinguish Local, Gemini, rules-resolved, and error states rather than labeling every response Gemini.
+
+## Diagnostics
+
+Diagnostics shows event count, error count, slow-operation count, slowest operation, newest-first history, refresh, copy-report, and clear-with-confirmation.
+
+## State behavior
+
+Loading, unavailable, retry, unsupported-rule, pending-roll, and combat-input states must be explicit. A failed remote request must not discard a recorded action, roll, or confirmed local state.

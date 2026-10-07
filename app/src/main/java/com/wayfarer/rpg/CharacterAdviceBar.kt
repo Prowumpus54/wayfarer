@@ -80,7 +80,7 @@ The current sheet and local catalog are PF2e-adapted. Do not mix editions.
 """.trimIndent()
                             }
                             val instruction = """
-You are Wayfarer's character advisor.
+You are LoreWise's character advisor.
 $rulesInstruction
 Give concise practical advice. No changes are saved from this response.
 If asked to build an action, explain prerequisites, checks, dice, modifiers,
@@ -105,12 +105,37 @@ PLAYER QUESTION: $question
 """.trimIndent()
                             var answer: String? = null
                             for (model in listOf("gemini-3.8-flash", "gemini-3.5-flash-lite")) {
+                                val started = System.nanoTime()
+                                val correlationId = LoreWiseDiagnostics.record(
+                                    "ai", "character_advice", DiagnosticStatus.INFO,
+                                    detail = "model=$model"
+                                )
                                 try {
                                     answer = Firebase.ai(backend = GenerativeBackend.googleAI())
                                         .generativeModel(model).generateContent(instruction).text
+                                    LoreWiseDiagnostics.record(
+                                        "ai", "character_advice", DiagnosticStatus.OK,
+                                        durationMs = (System.nanoTime() - started) / 1_000_000,
+                                        detail = "model=$model",
+                                        correlationId = correlationId
+                                    )
                                     if (!answer.isNullOrBlank()) break
-                                } catch (cancel: CancellationException) { throw cancel }
-                                catch (_: Exception) { /* Try the existing fallback. */ }
+                                } catch (cancel: CancellationException) {
+                                    LoreWiseDiagnostics.record(
+                                        "ai", "character_advice", DiagnosticStatus.CANCELLED,
+                                        durationMs = (System.nanoTime() - started) / 1_000_000,
+                                        detail = "model=$model",
+                                        correlationId = correlationId
+                                    )
+                                    throw cancel
+                                } catch (error: Exception) {
+                                    LoreWiseDiagnostics.record(
+                                        "ai", "character_advice", DiagnosticStatus.RETRY,
+                                        durationMs = (System.nanoTime() - started) / 1_000_000,
+                                        detail = "model=$model ${error::class.java.simpleName}",
+                                        correlationId = correlationId
+                                    )
+                                }
                             }
                             response = answer?.takeIf { it.isNotBlank() }
                                 ?: "The assistant is unavailable. Your question is kept; try again. Your sheet has not changed."

@@ -23,6 +23,10 @@ class GoogleAccount(private val activity: Activity) {
         onFailure: (String) -> Unit
     ) {
         cancellation = CancellationSignal()
+        val started = System.nanoTime()
+        val correlationId = LoreWiseDiagnostics.record(
+            "auth", "google_credential", DiagnosticStatus.INFO
+        )
         val option = GetSignInWithGoogleOption.Builder(serverClientId).build()
         val request = GetCredentialRequest.Builder()
             .addCredentialOption(option)
@@ -39,10 +43,20 @@ class GoogleAccount(private val activity: Activity) {
                 GetCredentialException
             > {
                 override fun onResult(result: GetCredentialResponse) {
+                    LoreWiseDiagnostics.record(
+                        "auth", "google_credential", DiagnosticStatus.OK,
+                        durationMs = (System.nanoTime() - started) / 1_000_000,
+                        correlationId = correlationId
+                    )
                     finishGoogleCredential(result, onSuccess, onFailure)
                 }
 
                 override fun onError(e: GetCredentialException) {
+                    LoreWiseDiagnostics.error(
+                        "auth", "google_credential", e,
+                        (System.nanoTime() - started) / 1_000_000,
+                        correlationId
+                    )
                     val message = if (e is NoCredentialException) {
                         "No Google account is available on this device."
                     } else {
@@ -59,11 +73,21 @@ class GoogleAccount(private val activity: Activity) {
         onSuccess: () -> Unit,
         onFailure: (String) -> Unit
     ) {
+        val started = System.nanoTime()
+        val correlationId = LoreWiseDiagnostics.record(
+            "auth", "firebase_sign_in", DiagnosticStatus.INFO
+        )
         try {
             val credential = response.credential
             if (credential !is CustomCredential ||
                 credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
             ) {
+                LoreWiseDiagnostics.record(
+                    "auth", "firebase_sign_in", DiagnosticStatus.WARN,
+                    durationMs = (System.nanoTime() - started) / 1_000_000,
+                    detail = "unsupported credential type",
+                    correlationId = correlationId
+                )
                 onFailure("Google did not return a usable sign-in.")
                 return
             }
@@ -74,11 +98,28 @@ class GoogleAccount(private val activity: Activity) {
             )
             FirebaseAuth.getInstance()
                 .signInWithCredential(firebaseCredential)
-                .addOnSuccessListener(activity) { onSuccess() }
-                .addOnFailureListener(activity) {
+                .addOnSuccessListener(activity) {
+                    LoreWiseDiagnostics.record(
+                        "auth", "firebase_sign_in", DiagnosticStatus.OK,
+                        durationMs = (System.nanoTime() - started) / 1_000_000,
+                        correlationId = correlationId
+                    )
+                    onSuccess()
+                }
+                .addOnFailureListener(activity) { error ->
+                    LoreWiseDiagnostics.error(
+                        "auth", "firebase_sign_in", error,
+                        (System.nanoTime() - started) / 1_000_000,
+                        correlationId
+                    )
                     onFailure("Firebase could not complete Google sign-in.")
                 }
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            LoreWiseDiagnostics.error(
+                "auth", "firebase_sign_in", error,
+                (System.nanoTime() - started) / 1_000_000,
+                correlationId
+            )
             onFailure("Google sign-in could not be completed.")
         }
     }

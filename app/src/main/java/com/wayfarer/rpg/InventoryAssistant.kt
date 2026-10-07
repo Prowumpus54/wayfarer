@@ -36,9 +36,9 @@ class InventoryAssistant {
         }
 
         return """
-You are Wayfarer's inventory assistant.
+You are LoreWise's inventory assistant.
 
-Help a casual player manage this Pathfinder 2e-adapted character's pack.
+Help a casual player manage this ${if (character.isPf1()) "Pathfinder 1e" else "legacy PF2e-adapted"} character's pack.
 Never remove a quest item. Keep essential weapons, armor, class tools,
 spellcasting needs, food, light, and basic adventuring supplies unless the
 player explicitly asks otherwise.
@@ -86,13 +86,33 @@ Rules:
         var last: Exception? = null
         for (modelName in modelNames) {
             repeat(2) { attempt ->
+                val started = System.nanoTime()
+                val correlationId = LoreWiseDiagnostics.record(
+                    "ai", "inventory_assistant", DiagnosticStatus.INFO,
+                    detail = "model=$modelName attempt=${attempt + 1}"
+                )
                 try {
                     val model = Firebase
                         .ai(backend = GenerativeBackend.googleAI())
                         .generativeModel(modelName)
-                    return model.generateContent(prompt).text.orEmpty()
+                    val result = model.generateContent(prompt).text.orEmpty()
+                    LoreWiseDiagnostics.record(
+                        "ai", "inventory_assistant", DiagnosticStatus.OK,
+                        durationMs = (System.nanoTime() - started) / 1_000_000,
+                        detail = "model=$modelName",
+                        correlationId = correlationId
+                    )
+                    return result
                 } catch (error: Exception) {
                     last = error
+                    LoreWiseDiagnostics.record(
+                        "ai", "inventory_assistant",
+                        if (attempt == 0) DiagnosticStatus.RETRY
+                        else DiagnosticStatus.ERROR,
+                        durationMs = (System.nanoTime() - started) / 1_000_000,
+                        detail = "model=$modelName ${error::class.java.simpleName}",
+                        correlationId = correlationId
+                    )
                     if (attempt == 0) delay(700)
                 }
             }
