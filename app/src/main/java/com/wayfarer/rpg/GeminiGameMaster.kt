@@ -45,6 +45,7 @@ data class GmContext(
     val destinations: List<String>,
     val npcs: List<String>,
     val encounters: List<String>,
+    val treasure: List<String>,
     val character: CharacterState,
     val party: List<PartyMember>,
     val recentHistory: List<String>,
@@ -221,6 +222,9 @@ WEAPONS: ${character.meleeWeapon}; ${character.rangedWeapon}
 RELEVANT ENCOUNTERS / HAZARDS:
 ${context.encounters.joinToString("\n")}
 
+MODULE TREASURE / LOOT NOTES (GM ONLY):
+${context.treasure.joinToString("\n").ifBlank { "No module treasure is listed here." }}
+
 AUTHORITATIVE RUNTIME STATE:
 ${context.runtimeState.joinToString("\n").ifBlank { "No active encounter or challenge." }}
 
@@ -276,6 +280,9 @@ ${context.npcs.joinToString("; ")}
 
 ENCOUNTERS / HAZARDS IN THIS LOCATION:
 ${context.encounters.joinToString("\n")}
+
+MODULE TREASURE / LOOT NOTES (GM ONLY):
+${context.treasure.joinToString("\n").ifBlank { "No module treasure is listed here." }}
 
 AUTHORITATIVE RUNTIME STATE:
 ${context.runtimeState.joinToString("\n").ifBlank { "No active encounter or challenge." }}
