@@ -1,5 +1,6 @@
 package com.wayfarer.rpg
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -12,6 +13,8 @@ import androidx.compose.ui.unit.sp
 @Composable
 fun RuntimeStateCard(
     state: CampaignRuntimeState,
+    selectedTargetId: String? = null,
+    onSelectTarget: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val encounter = state.activeEncounter
@@ -35,6 +38,13 @@ fun RuntimeStateCard(
                         color = Gold,
                         fontSize = 10.sp
                     )
+                    it.initiativeOrder.getOrNull(it.currentTurnIndex)?.let { turn ->
+                        Text(
+                            "Turn: " + turn.name,
+                            color = Green,
+                            fontSize = 10.sp
+                        )
+                    }
                 }
                 val remaining = it.creatures.count { creature ->
                     creature.status == CreatureStatus.ACTIVE &&
@@ -50,15 +60,35 @@ fun RuntimeStateCard(
             if (it.creatures.isNotEmpty()) {
                 Spacer(Modifier.height(6.dp))
                 it.creatures.take(8).forEach { creature ->
+                    val selectable = creature.status == CreatureStatus.ACTIVE &&
+                        creature.currentHp > 0
                     Row(
-                        Modifier.fillMaxWidth(),
+                        Modifier
+                            .fillMaxWidth()
+                            .then(
+                                if (selectable) {
+                                    Modifier.clickable { onSelectTarget(creature.id) }
+                                } else {
+                                    Modifier
+                                }
+                            ),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            creature.name,
-                            color = if (creature.status == CreatureStatus.ACTIVE) Text else Muted,
+                            (if (selectedTargetId == creature.id) "◎ " else "") +
+                                creature.name,
+                            color = when {
+                                selectedTargetId == creature.id -> Gold
+                                creature.status == CreatureStatus.ACTIVE -> Text
+                                else -> Muted
+                            },
                             fontSize = 11.sp,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            fontWeight = if (selectedTargetId == creature.id) {
+                                FontWeight.Bold
+                            } else {
+                                FontWeight.Normal
+                            }
                         )
                         Text(
                             creature.currentHp.toString() + "/" + creature.maxHp + " HP" +
