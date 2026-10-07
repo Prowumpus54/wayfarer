@@ -34,6 +34,10 @@ fun WayfarerApp() {
     val appContext = LocalContext.current.applicationContext
     val moduleId = "sunless_citadel"
     val moduleRepo = remember { AdventureModuleRepository(appContext) }
+    val rulesRepo = remember { RulesRepository(appContext) }
+    DisposableEffect(rulesRepo) {
+        onDispose { rulesRepo.close() }
+    }
 
     val manifest = remember {
         moduleRepo.ensureBundledModuleInstalled(moduleId)
@@ -264,6 +268,7 @@ fun WayfarerApp() {
                 currentLocation = currentLocation,
                 sceneContext = sceneContext,
                 runtimeState = runtimeState,
+                ruleset = manifest.ruleset,
                 onAction = { action ->
                     addEvent(
                         GameEvent("Player action", action, "action")
@@ -282,7 +287,9 @@ fun WayfarerApp() {
                         character = active,
                         runtime = runtimeState,
                         effects = effects,
-                        location = currentLocation
+                        location = currentLocation,
+                        ruleset = manifest.ruleset,
+                        creatureResolver = rulesRepo::findCreatureCombatProfile
                     )
                     if (application.character != active) {
                         updateSelected(application.character)
