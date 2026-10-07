@@ -38,7 +38,7 @@ LoreWise must mirror, per conversation/session:
 
 The mirror must be readable from the authorized desktop/BuildWise path, queue locally while offline, synchronize when connectivity returns, and never contain auth tokens or other credentials.
 
-Status: **required, not yet implemented**. Current diagnostics record LLM operation boundaries only.
+Status: **partially implemented**. Local Gemma traffic is now mirrored by `local-llm/gateway.py` into an untracked desktop JSONL transcript containing the exact prompt, response, model/profile, timestamps, latency, client address, status, and request ID. The broader app-level layer for cloud Gemini/other AI helpers, offline queuing, and unified conversation archives remains pending.
 
 ## Support workflow
 

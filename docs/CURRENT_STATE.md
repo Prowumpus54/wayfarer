@@ -22,7 +22,7 @@ Primary ruleset: Pathfinder 1e
 - Wise-standard documentation/metadata bootstrap and project-specific documentation
 - stale PF2 default removed from GameStateEngine; unused Firebase Storage dependency removed
 - PF1 character creation now clamps generated spells to legal slot/spells-known limits
-- Wise standard 1.1.0 LLM transcript observability is adopted as a required project contract; LoreWise desktop-readable transcript mirroring is the next implementation slice
+- Wise standard 1.1.0 LLM transcript observability is adopted; local Gemma requests now mirror exact prompts/responses to a protected untracked desktop JSONL transcript, while the unified app/cloud/offline transcript layer remains pending
 
 ## Verification currently completed
 - `testDebugUnitTest`: passed, 39 tests / 0 failures / 0 errors

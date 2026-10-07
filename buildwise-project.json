@@ -42,7 +42,9 @@
     "transcriptReadableFromDesktop": false,
     "offlineQueueRequired": true,
     "redactionRequired": true,
-    "implementation": []
+    "implementation": [
+      "local-llm/gateway.py (local Gemma transcript mirror)"
+    ]
   },
   "verification": {
     "primaryCommand": ".\\gradlew.bat testDebugUnitTest lintDebug assembleDebug assembleRelease",
