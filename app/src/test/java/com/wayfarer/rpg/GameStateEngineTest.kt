@@ -115,6 +115,58 @@ class GameStateEngineTest {
         assertEquals("Sunstone", taken.character.inventory.single().name)
     }
 
+
+    @Test
+    fun resolvedCreatureProfileOverridesModelSuppliedCombatNumbers() {
+        val profile = CreatureCombatProfile(
+            ruleRef = "creature:goblin-warrior",
+            name = "Goblin Warrior",
+            level = -1,
+            maxHp = 6,
+            armorClass = 16,
+            initiativeBonus = 2,
+            fortitude = 5,
+            reflex = 7,
+            will = 3,
+            attacks = listOf(
+                CreatureAttackProfile(
+                    name = "Dogslicer",
+                    attackBonus = 7,
+                    damageDice = "1d6",
+                    damageType = "slashing"
+                )
+            )
+        )
+
+        val result = GameStateEngine.apply(
+            character = CharacterState(level = 1),
+            runtime = CampaignRuntimeState(),
+            effects = listOf(
+                GmEffect(type = "start_encounter", name = "Goblin ambush"),
+                GmEffect(
+                    type = "spawn_creature",
+                    name = "Goblin",
+                    quantity = 1,
+                    maxHp = 999,
+                    armorClass = 99,
+                    xpValue = 999
+                )
+            ),
+            location = "Hall",
+            ruleset = "pf2e-adapted",
+            creatureResolver = { profile }
+        )
+
+        val goblin = result.runtime.activeEncounter!!.creatures.single()
+        assertTrue(goblin.statsResolved)
+        assertEquals("Goblin Warrior", goblin.name)
+        assertEquals(6, goblin.maxHp)
+        assertEquals(16, goblin.armorClass)
+        assertEquals(7, goblin.attackBonus)
+        assertEquals("1d6", goblin.damageDice)
+        assertEquals(20, goblin.xpValue)
+    }
+
     @Test
     fun characterDamageConsumesTemporaryHpBeforeCurrentHp() {
         val character = CharacterState(
