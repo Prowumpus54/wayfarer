@@ -37,10 +37,12 @@ fun PlayScreen(
     campaignTitle: String,
     currentLocation: String,
     sceneContext: ModuleSceneContext?,
+    runtimeState: CampaignRuntimeState,
     onAction: (String) -> Unit,
     onDiceRoll: (String) -> Unit,
     recentEvents: List<GameEvent>,
     onGmReply: (String) -> Unit,
+    onStateEffects: (List<GmEffect>) -> Unit,
     onXpAward: (Int) -> Unit
 ) {
     var input by session.input
@@ -63,6 +65,7 @@ fun PlayScreen(
     var pendingRoll by session.pendingRoll
     var pendingCheck by session.pendingCheck
     var pendingContext by session.pendingContext
+    var pendingActionEffects by session.pendingActionEffects
     var gmDiceModifiers by session.gmDiceModifiers
 
     val context = LocalContext.current
@@ -124,9 +127,41 @@ fun PlayScreen(
         val clean = text.trim()
         if (clean.isEmpty() || gmBusy || pendingCheck != null) return
 
+        val castSpellName = clean
+            .takeIf { it.startsWith("I cast ", ignoreCase = true) }
+            ?.substring(7)
+            ?.trim()
+            ?.trimEnd('.')
+            ?.takeIf { spell ->
+                character.spells.values.flatten().any {
+                    it.equals(spell, ignoreCase = true)
+                }
+            }
+        val deferredSpellEffect = castSpellName?.let { spell ->
+            val preview = GameStateEngine.consumeSpell(character, spell)
+            if (preview == null) {
+                gmStatus = "No spell resource remains for " + spell
+                return
+            }
+            if (preview == character) null else GmEffect(
+                type = GmEffectType.SPEND_SPELL_SLOT.wireName,
+                name = spell
+            )
+        }
+
         val action = character.characterName + ": " + clean
         val rollForAction = pendingRoll
         val moduleScene = sceneContext
+        val recentHistory = recentEvents
+            .filter {
+                it.type in setOf(
+                    "action", "roll", "gm", "state", "encounter",
+                    "loot", "challenge", "resource", "world", "xp"
+                )
+            }
+            .take(24)
+            .asReversed()
+            .map { it.title + ": " + it.body }
         val context = GmContext(
             campaignTitle = campaignTitle,
             location = currentLocation,
@@ -143,6 +178,8 @@ fun PlayScreen(
                 .orEmpty(),
             character = character,
             party = party,
+            recentHistory = recentHistory,
+            runtimeState = GameStateEngine.contextLines(runtimeState),
             action = action,
             playerRoll = rollForAction
         )
@@ -211,12 +248,17 @@ fun PlayScreen(
                     } else {
                         pendingCheck = request
                         pendingContext = context
+                        pendingActionEffects = listOfNotNull(deferredSpellEffect)
+                        if (turn.effects.isNotEmpty()) onStateEffects(turn.effects)
                         check = null
                         checkName = request.name
                         gmStatus = "Roll requested • " + request.name + " vs DC " + request.dc
                         openPanel = "dice"
                     }
                 } else {
+                    val effects = turn.effects + listOfNotNull(deferredSpellEffect)
+                    if (effects.isNotEmpty()) onStateEffects(effects)
+                    pendingActionEffects = emptyList()
                     gmStatus = "Gemini " + turn.modelName.removePrefix("gemini-")
                     if (turn.xpAward > 0) onXpAward(turn.xpAward)
                 }
@@ -258,11 +300,14 @@ fun PlayScreen(
                 val resolved = gameMaster.resolve(gmContext, request, result)
                 gmNarration = resolved.narration
                 pushGmModifiers(resolved.modifiers)
+                val effects = resolved.effects + pendingActionEffects
+                if (effects.isNotEmpty()) onStateEffects(effects)
                 gmNarration?.let(onGmReply)
                 if (resolved.xpAward > 0) onXpAward(resolved.xpAward)
                 gmStatus = "Gemini " + resolved.modelName.removePrefix("gemini-")
                 pendingCheck = null
                 pendingContext = null
+                pendingActionEffects = emptyList()
                 openPanel = null
             } catch (cancel: CancellationException) { throw cancel
             } catch (error: Exception) {
