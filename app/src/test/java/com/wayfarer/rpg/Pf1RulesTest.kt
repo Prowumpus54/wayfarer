@@ -93,6 +93,46 @@ class Pf1RulesTest {
     }
 
     @Test
+    fun coreCasterSpellSlotsFollowPf1TablesAndAbilityBonuses() {
+        assertEquals(
+            mapOf(0 to 3, 1 to 2),
+            pf1SpellSlotsForClass("Wizard", 1, 12)
+        )
+        assertEquals(
+            mapOf(1 to 4),
+            pf1SpellSlotsForClass("Sorcerer", 1, 16)
+        )
+        assertEquals(
+            mapOf(1 to 2),
+            pf1SpellSlotsForClass("Bard", 1, 16)
+        )
+        assertEquals(
+            mapOf(1 to 1),
+            pf1SpellSlotsForClass("Paladin", 4, 14)
+        )
+        assertEquals(
+            mapOf(1 to 1),
+            pf1SpellSlotsForClass("Ranger", 4, 14)
+        )
+        assertEquals(
+            mapOf(1 to 1),
+            pf1DomainSpellSlots("Cleric", 1)
+        )
+    }
+
+    @Test
+    fun spontaneousKnownLimitsAreIndependentOfAbilityScore() {
+        assertEquals(
+            mapOf(0 to 4, 1 to 2),
+            pf1SpellsKnownLimit("Sorcerer", 1)
+        )
+        assertEquals(
+            mapOf(0 to 6, 1 to 4, 2 to 2),
+            pf1SpellsKnownLimit("Bard", 4)
+        )
+    }
+
+    @Test
     fun legacyPf2StarterMigratesWithoutPf2DefaultFeats() {
         val legacy = CharacterState(
             ruleset = GameRuleset.PF2E_ADAPTED.wireName,
