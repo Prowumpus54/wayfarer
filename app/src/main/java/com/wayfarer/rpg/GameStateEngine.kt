@@ -42,12 +42,18 @@ data class EncounterCreatureState(
     val maxHp: Int,
     val currentHp: Int = maxHp,
     val armorClass: Int,
+    val touchArmorClass: Int = armorClass,
+    val flatFootedArmorClass: Int = armorClass,
+    val cmb: Int = 0,
+    val cmd: Int = 10,
     val initiative: Int? = null,
     val initiativeBonus: Int = 0,
     val attackName: String = "",
     val attackBonus: Int? = null,
     val damageDice: String = "",
     val damageType: String = "",
+    val criticalThreatMin: Int = 20,
+    val criticalMultiplier: Int = 2,
     val fortitude: Int = 0,
     val reflex: Int = 0,
     val will: Int = 0,
@@ -197,10 +203,13 @@ object GameStateEngine {
                     val ac = profile?.armorClass
                         ?: effect.armorClass.takeIf { it > 0 }?.coerceIn(1, 99)
                         ?: 10
-                    val xp = if (profile != null && ruleset.lowercase().contains("pf2")) {
-                        pf2CreatureXp(profile.level, nextCharacter.level)
-                    } else {
-                        effect.xpValue.coerceIn(0, 1_000_000)
+                    val xp = when {
+                        profile == null -> effect.xpValue.coerceIn(0, 1_000_000)
+                        profile.ruleset == GameRuleset.PF1E ->
+                            profile.xpValue.coerceIn(0, 1_000_000)
+                        ruleset.lowercase().contains("pf2") ->
+                            pf2CreatureXp(profile.level, nextCharacter.level)
+                        else -> profile.xpValue.coerceIn(0, 1_000_000)
                     }
                     var encounter = nextRuntime.activeEncounter
                     if (encounter == null || encounter.status != EncounterStatus.ACTIVE) {
@@ -226,11 +235,17 @@ object GameStateEngine {
                             maxHp = maxHp,
                             currentHp = maxHp,
                             armorClass = ac,
+                            touchArmorClass = profile?.touchArmorClass ?: ac,
+                            flatFootedArmorClass = profile?.flatFootedArmorClass ?: ac,
+                            cmb = profile?.cmb ?: 0,
+                            cmd = profile?.cmd ?: 10,
                             initiativeBonus = profile?.initiativeBonus ?: 0,
                             attackName = primaryAttack?.name.orEmpty(),
                             attackBonus = primaryAttack?.attackBonus,
                             damageDice = primaryAttack?.damageDice.orEmpty(),
                             damageType = primaryAttack?.damageType.orEmpty(),
+                            criticalThreatMin = primaryAttack?.criticalThreatMin ?: 20,
+                            criticalMultiplier = primaryAttack?.criticalMultiplier ?: 2,
                             fortitude = profile?.fortitude ?: 0,
                             reflex = profile?.reflex ?: 0,
                             will = profile?.will ?: 0,
