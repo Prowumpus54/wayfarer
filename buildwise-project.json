@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "standardVersion": "1.0.0",
+  "standardVersion": "1.1.0",
   "project": {
     "name": "LoreWise",
     "slug": "lorewise",
@@ -36,6 +36,13 @@
       "app/src/main/java/com/wayfarer/rpg/Diagnostics.kt",
       "app/src/main/java/com/wayfarer/rpg/DiagnosticsScreen.kt"
     ]
+  },
+  "llmObservability": {
+    "requiredWhenLlmUsed": true,
+    "transcriptReadableFromDesktop": false,
+    "offlineQueueRequired": true,
+    "redactionRequired": true,
+    "implementation": []
   },
   "verification": {
     "primaryCommand": ".\\gradlew.bat testDebugUnitTest lintDebug assembleDebug assembleRelease",

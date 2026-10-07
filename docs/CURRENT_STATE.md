@@ -22,6 +22,7 @@ Primary ruleset: Pathfinder 1e
 - Wise-standard documentation/metadata bootstrap and project-specific documentation
 - stale PF2 default removed from GameStateEngine; unused Firebase Storage dependency removed
 - PF1 character creation now clamps generated spells to legal slot/spells-known limits
+- Wise standard 1.1.0 LLM transcript observability is adopted as a required project contract; LoreWise desktop-readable transcript mirroring is the next implementation slice
 
 ## Verification currently completed
 - `testDebugUnitTest`: passed, 39 tests / 0 failures / 0 errors
@@ -38,4 +39,4 @@ Primary ruleset: Pathfinder 1e
 - Production deployment: not performed
 
 ## Active risks
-See `KNOWN_ISSUES.md`. The main release gates are device verification, Play Integrity production configuration, secure transport for a release local-GM path, and Gradle deprecation cleanup.
+See `KNOWN_ISSUES.md`. The main release gates are device verification, Play Integrity production configuration, secure transport for a release local-GM path, desktop-readable LLM transcript/context mirroring, and Gradle deprecation cleanup.
