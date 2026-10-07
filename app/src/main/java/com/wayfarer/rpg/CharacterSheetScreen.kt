@@ -54,14 +54,33 @@ fun CharacterSheetScreen(
                 Text("Lv " + character.level, color = Gold)
                 Spacer(Modifier.width(8.dp))
                 if (character.level < 20) {
+                    val track = runCatching {
+                        Pf1ExperienceTrack.valueOf(
+                            character.pf1ExperienceTrack.uppercase()
+                        )
+                    }.getOrDefault(Pf1ExperienceTrack.MEDIUM)
+                    val nextXp = if (character.isPf1()) {
+                        pf1XpThreshold(character.level + 1, track)
+                    } else {
+                        1000
+                    }
                     Button(
                         onClick = { showLevelUp = true },
-                        enabled = character.xp >= 1000,
-                        colors = ButtonDefaults.buttonColors(containerColor = GreenDark),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
+                        enabled = character.xp >= nextXp,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = GreenDark
+                        ),
+                        contentPadding = PaddingValues(
+                            horizontal = 12.dp,
+                            vertical = 6.dp
+                        )
                     ) {
                         Text(
-                            if (character.xp >= 1000) "Level Up" else character.xp.toString() + "/1000 XP",
+                            if (character.xp >= nextXp) {
+                                "Level Up"
+                            } else {
+                                character.xp.toString() + "/" + nextXp + " XP"
+                            },
                             color = Text,
                             fontSize = 12.sp
                         )
@@ -82,25 +101,50 @@ fun CharacterSheetScreen(
         }
 
         CharacterAdviceBar(character, rules, onSaveAction = { action -> onCharacterChange(character.copy(actionsAndActivities = (character.actionsAndActivities.lines() + action).filter { it.isNotBlank() }.distinct().joinToString("\n"))) })
-        when (tab) {
-            "Core" -> CoreSheet(character, onCharacterChange, rules)
-            "Feats & Inventory" -> FeatsInventorySheet(character, onCharacterChange, rules)
-            "Character & Actions" -> CharacterActionsSheet(character, onCharacterChange)
-            else -> SpellsSheet(character, onCharacterChange, rules)
+        if (character.isPf1()) {
+            when (tab) {
+                "Core" -> Pf1CoreSheet(character, onCharacterChange)
+                "Feats & Inventory" ->
+                    Pf1FeatsInventorySheet(character, onCharacterChange)
+                "Character & Actions" ->
+                    CharacterActionsSheet(character, onCharacterChange)
+                else -> Pf1SpellsSheet(character, onCharacterChange)
+            }
+        } else {
+            when (tab) {
+                "Core" -> CoreSheet(character, onCharacterChange, rules)
+                "Feats & Inventory" ->
+                    FeatsInventorySheet(character, onCharacterChange, rules)
+                "Character & Actions" ->
+                    CharacterActionsSheet(character, onCharacterChange)
+                else -> SpellsSheet(character, onCharacterChange, rules)
+            }
         }
     }
 
     if (showLevelUp) {
-        LevelUpDialog(
-            character = character,
-            rules = rules,
-            onDismiss = { showLevelUp = false },
-            onConfirm = { updated ->
-                onCharacterChange(updated)
-                showLevelUp = false
-                tab = "Feats & Inventory"
-            }
-        )
+        if (character.isPf1()) {
+            Pf1LevelUpDialog(
+                character = character,
+                onDismiss = { showLevelUp = false },
+                onConfirm = { updated ->
+                    onCharacterChange(updated)
+                    showLevelUp = false
+                    tab = "Core"
+                }
+            )
+        } else {
+            LevelUpDialog(
+                character = character,
+                rules = rules,
+                onDismiss = { showLevelUp = false },
+                onConfirm = { updated ->
+                    onCharacterChange(updated)
+                    showLevelUp = false
+                    tab = "Feats & Inventory"
+                }
+            )
+        }
     }
 }
 
