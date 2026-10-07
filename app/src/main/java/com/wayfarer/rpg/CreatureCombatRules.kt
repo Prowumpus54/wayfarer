@@ -7,7 +7,9 @@ data class CreatureAttackProfile(
     val attackBonus: Int,
     val damageDice: String,
     val damageType: String,
-    val rangeFt: Int? = null
+    val rangeFt: Int? = null,
+    val criticalThreatMin: Int = 20,
+    val criticalMultiplier: Int = 2
 )
 
 data class CreatureCombatProfile(
@@ -20,7 +22,15 @@ data class CreatureCombatProfile(
     val fortitude: Int,
     val reflex: Int,
     val will: Int,
-    val attacks: List<CreatureAttackProfile>
+    val attacks: List<CreatureAttackProfile>,
+    val ruleset: GameRuleset = GameRuleset.PF2E_ADAPTED,
+    val challengeRating: String = "",
+    val xpValue: Int = 0,
+    val touchArmorClass: Int = armorClass,
+    val flatFootedArmorClass: Int = armorClass,
+    val baseAttackBonus: Int = 0,
+    val cmb: Int = 0,
+    val cmd: Int = 10
 ) {
     val primaryAttack: CreatureAttackProfile?
         get() = attacks.firstOrNull()
