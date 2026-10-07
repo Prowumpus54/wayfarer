@@ -256,6 +256,143 @@ fun PlayScreen(
                 val fastIntent = jevDecision?.takeIf {
                     JevCombatPolicy.route(it).route == JevRoute.ANDROID_RULES
                 }
+
+                if (
+                    fastIntent?.actionType == JevActionType.STRIKE &&
+                    rollForAction == null &&
+                    deferredSpellEffect == null
+                ) {
+                    var stagedCharacter = character
+                    var stagedRuntime = runtimeState
+                    val enemySummaries = mutableListOf<String>()
+
+                    fun runEnemyTurns() {
+                        var guard = 0
+                        while (guard++ < 12 && stagedCharacter.currentHp > 0) {
+                            val encounter = stagedRuntime.activeEncounter ?: break
+                            val currentTurn = encounter.initiativeOrder
+                                .getOrNull(encounter.currentTurnIndex)
+                                ?: break
+                            if (currentTurn.actorType != CombatActorType.CREATURE) break
+
+                            val before = stagedRuntime
+                            val application = onStateEffects(
+                                listOf(
+                                    GmEffect(
+                                        type = GmEffectType.CREATURE_STRIKE.wireName,
+                                        name = currentTurn.actorId
+                                    )
+                                )
+                            )
+                            stagedCharacter = application.character
+                            stagedRuntime = application.runtime
+                            enemySummaries += application.events
+                                .filter {
+                                    it.type == "encounter" &&
+                                        (it.title == "Enemy attack" ||
+                                            it.title == "Enemy action blocked")
+                                }
+                                .map { it.body }
+                            if (stagedRuntime == before) break
+                        }
+                    }
+
+                    var combat = CombatRulesEngine.resolvePlayerStrike(
+                        character = stagedCharacter,
+                        runtime = stagedRuntime,
+                        selectedTargetId = selectedTargetId,
+                        actionText = clean,
+                        ruleset = ruleset
+                    )
+
+                    if (combat.status == CombatResolutionStatus.NEED_INITIATIVE) {
+                        val initiativeApp = onStateEffects(combat.effects)
+                        stagedCharacter = initiativeApp.character
+                        stagedRuntime = initiativeApp.runtime
+                        runEnemyTurns()
+                        combat = CombatRulesEngine.resolvePlayerStrike(
+                            character = stagedCharacter,
+                            runtime = stagedRuntime,
+                            selectedTargetId = selectedTargetId,
+                            actionText = clean,
+                            ruleset = ruleset
+                        )
+                    } else if (combat.status == CombatResolutionStatus.NOT_PLAYER_TURN) {
+                        runEnemyTurns()
+                        combat = CombatRulesEngine.resolvePlayerStrike(
+                            character = stagedCharacter,
+                            runtime = stagedRuntime,
+                            selectedTargetId = selectedTargetId,
+                            actionText = clean,
+                            ruleset = ruleset
+                        )
+                    }
+
+                    when (combat.status) {
+                        CombatResolutionStatus.RESOLVED -> {
+                            if (combat.rollText.isNotBlank()) {
+                                onDiceRoll(combat.rollText)
+                            }
+                            val playerApp = onStateEffects(combat.effects)
+                            stagedCharacter = playerApp.character
+                            stagedRuntime = playerApp.runtime
+                            if (selectedTargetId != null) {
+                                val stillActive = stagedRuntime.activeEncounter
+                                    ?.creatures
+                                    ?.any {
+                                        it.id == selectedTargetId &&
+                                            it.status == CreatureStatus.ACTIVE &&
+                                            it.currentHp > 0
+                                    } == true
+                                if (!stillActive) selectedTargetId = null
+                            }
+                            runEnemyTurns()
+
+                            val narrationContext = context.copy(
+                                character = stagedCharacter,
+                                runtimeState = GameStateEngine.contextLines(stagedRuntime)
+                            )
+                            val mechanicalSummary = buildString {
+                                append(combat.summary)
+                                if (enemySummaries.isNotEmpty()) {
+                                    append("\nSubsequent enemy turns:\n")
+                                    append(enemySummaries.joinToString("\n"))
+                                }
+                            }
+                            val narrated = gameMaster.narrateMechanicalResult(
+                                narrationContext,
+                                mechanicalSummary
+                            )
+                            gmNarration = narrated.narration
+                            gmNarration?.let(onGmReply)
+                            gmStatus = "Rules resolved • " +
+                                narrated.modelName.removePrefix("gemini-")
+                            pendingActionEffects = emptyList()
+                            if (pendingRoll == rollForAction) pendingRoll = null
+                            return@launch
+                        }
+
+                        CombatResolutionStatus.NEED_TARGET,
+                        CombatResolutionStatus.NEED_VALIDATED_STATS,
+                        CombatResolutionStatus.NOT_PLAYER_TURN -> {
+                            gmNarration = combat.summary
+                            gmNarration?.let(onGmReply)
+                            gmStatus = "Combat needs input"
+                            return@launch
+                        }
+
+                        CombatResolutionStatus.NEED_INITIATIVE -> {
+                            gmNarration = "Initiative could not advance to the player's turn."
+                            gmNarration?.let(onGmReply)
+                            gmStatus = "Combat stalled"
+                            return@launch
+                        }
+
+                        CombatResolutionStatus.NO_ACTIVE_ENCOUNTER,
+                        CombatResolutionStatus.UNSUPPORTED_RULESET -> Unit
+                    }
+                }
+
                 val turn = gameMaster.adjudicate(context, fastIntent)
                 gmNarration = turn.narration
                 pushGmModifiers(turn.modifiers)
