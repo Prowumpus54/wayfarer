@@ -23,7 +23,11 @@ class CharacterStore(
 
     fun load(): CharacterState? {
         val raw = prefs.getString("character_json", null) ?: return null
-        return runCatching { fromJson(JSONObject(raw)) }.getOrNull()
+        val parsed = runCatching { fromJson(JSONObject(raw)) }.getOrNull()
+            ?: return null
+        val migrated = Pf1CharacterMigration.migrate(parsed)
+        if (migrated != parsed) save(migrated)
+        return migrated
     }
 
     fun clear() {
@@ -34,6 +38,9 @@ class CharacterStore(
         val json = JSONObject()
         json.put("playerName", c.playerName)
         json.put("characterName", c.characterName)
+        json.put("ruleset", c.ruleset)
+        json.put("pf1SchemaVersion", c.pf1SchemaVersion)
+        json.put("pf1ExperienceTrack", c.pf1ExperienceTrack)
         json.put("xp", c.xp)
         json.put("ancestry", c.ancestry)
         json.put("heritage", c.heritage)
@@ -47,12 +54,19 @@ class CharacterStore(
         json.put("wounded", c.wounded)
         json.put("conditions", c.conditions)
         json.put("heroPoints", c.heroPoints)
+        json.put("size", c.size)
+        json.put("alignment", c.alignment)
+        json.put("traits", c.traits)
+        json.put("deity", c.deity)
         json.put("keyAbility", c.keyAbility.name)
         json.put("armorName", c.armorName)
         json.put("meleeWeapon", c.meleeWeapon)
         json.put("rangedWeapon", c.rangedWeapon)
         json.put("speed", c.speed)
+        json.put("movementNotes", c.movementNotes)
+        json.put("senses", c.senses)
         json.put("languages", c.languages)
+        json.put("resistances", c.resistances)
         json.put("notes", c.notes)
         json.put("appearance", c.appearance)
         json.put("attitude", c.attitude)
@@ -60,6 +74,28 @@ class CharacterStore(
         json.put("likes", c.likes)
         json.put("dislikes", c.dislikes)
         json.put("genderPronouns", c.genderPronouns)
+        json.put("actionsAndActivities", c.actionsAndActivities)
+        json.put("freeActionsAndReactions", c.freeActionsAndReactions)
+        json.put("campaignNotes", c.campaignNotes)
+
+        json.put("pf1ArmorEnhancement", c.pf1ArmorEnhancement)
+        json.put("pf1ShieldBonus", c.pf1ShieldBonus)
+        json.put("pf1ShieldEnhancement", c.pf1ShieldEnhancement)
+        json.put("pf1NaturalArmor", c.pf1NaturalArmor)
+        json.put("pf1DeflectionBonus", c.pf1DeflectionBonus)
+        json.put("pf1DodgeBonus", c.pf1DodgeBonus)
+        json.put("pf1MiscAcBonus", c.pf1MiscAcBonus)
+        json.put("pf1AttackMiscBonus", c.pf1AttackMiscBonus)
+        json.put("pf1DamageMiscBonus", c.pf1DamageMiscBonus)
+        json.put("pf1InitiativeMisc", c.pf1InitiativeMisc)
+        json.put("pf1CmbMisc", c.pf1CmbMisc)
+        json.put("pf1CmdMisc", c.pf1CmdMisc)
+        json.put("pf1SpellSaveMisc", c.pf1SpellSaveMisc)
+
+        json.put("pf1ClassLevels", intObject(c.pf1ClassLevels))
+        json.put("pf1SkillRanks", intObject(c.pf1SkillRanks))
+        json.put("pf1SkillMisc", intObject(c.pf1SkillMisc))
+        json.put("pf1SaveMisc", intObject(c.pf1SaveMisc))
 
         val abilities = JSONObject()
         c.abilities.forEach { (ability, score) ->
@@ -148,6 +184,10 @@ class CharacterStore(
 
         val spellSlots = intMap(json.optJSONObject("spellSlots"))
         val spellSlotsUsed = intMap(json.optJSONObject("spellSlotsUsed"))
+        val pf1ClassLevels = stringIntMap(json.optJSONObject("pf1ClassLevels"))
+        val pf1SkillRanks = stringIntMap(json.optJSONObject("pf1SkillRanks"))
+        val pf1SkillMisc = stringIntMap(json.optJSONObject("pf1SkillMisc"))
+        val pf1SaveMisc = stringIntMap(json.optJSONObject("pf1SaveMisc"))
 
         val spellsJson = json.optJSONObject("spells")
         val spells = mutableMapOf<Int, List<String>>()
@@ -162,12 +202,42 @@ class CharacterStore(
         return base.copy(
             playerName = json.optString("playerName"),
             characterName = json.optString("characterName", "Hero"),
+            ruleset = json.optString(
+                "ruleset",
+                GameRuleset.PF2E_ADAPTED.wireName
+            ),
+            pf1SchemaVersion = json.optInt("pf1SchemaVersion", 0),
+            pf1ExperienceTrack = json.optString(
+                "pf1ExperienceTrack",
+                Pf1ExperienceTrack.MEDIUM.name.lowercase()
+            ),
             xp = json.optInt("xp", 0),
             ancestry = json.optString("ancestry", base.ancestry),
             heritage = json.optString("heritage", base.heritage),
             background = json.optString("background", base.background),
             className = json.optString("className", base.className),
             level = json.optInt("level", 1).coerceIn(1, 20),
+            size = json.optString("size", base.size),
+            alignment = json.optString("alignment", base.alignment),
+            traits = json.optString("traits", base.traits),
+            deity = json.optString("deity", base.deity),
+            pf1ClassLevels = pf1ClassLevels,
+            pf1SkillRanks = pf1SkillRanks,
+            pf1SkillMisc = pf1SkillMisc,
+            pf1ArmorEnhancement = json.optInt("pf1ArmorEnhancement", 0),
+            pf1ShieldBonus = json.optInt("pf1ShieldBonus", 0),
+            pf1ShieldEnhancement = json.optInt("pf1ShieldEnhancement", 0),
+            pf1NaturalArmor = json.optInt("pf1NaturalArmor", 0),
+            pf1DeflectionBonus = json.optInt("pf1DeflectionBonus", 0),
+            pf1DodgeBonus = json.optInt("pf1DodgeBonus", 0),
+            pf1MiscAcBonus = json.optInt("pf1MiscAcBonus", 0),
+            pf1AttackMiscBonus = json.optInt("pf1AttackMiscBonus", 0),
+            pf1DamageMiscBonus = json.optInt("pf1DamageMiscBonus", 0),
+            pf1SaveMisc = pf1SaveMisc,
+            pf1InitiativeMisc = json.optInt("pf1InitiativeMisc", 0),
+            pf1CmbMisc = json.optInt("pf1CmbMisc", 0),
+            pf1CmdMisc = json.optInt("pf1CmdMisc", 0),
+            pf1SpellSaveMisc = json.optInt("pf1SpellSaveMisc", 0),
             maxHp = json.optInt("maxHp", base.maxHp),
             currentHp = json.optInt("currentHp", base.maxHp),
             tempHp = json.optInt("tempHp", base.tempHp),
@@ -184,7 +254,10 @@ class CharacterStore(
             meleeWeapon = json.optString("meleeWeapon", base.meleeWeapon),
             rangedWeapon = json.optString("rangedWeapon", base.rangedWeapon),
             speed = json.optInt("speed", base.speed),
+            movementNotes = json.optString("movementNotes", base.movementNotes),
+            senses = json.optString("senses", base.senses),
             languages = json.optString("languages", base.languages),
+            resistances = json.optString("resistances", base.resistances),
             notes = json.optString("notes"),
 
             appearance = json.optString("appearance"),
@@ -193,6 +266,15 @@ class CharacterStore(
             likes = json.optString("likes"),
             dislikes = json.optString("dislikes"),
             genderPronouns = json.optString("genderPronouns"),
+            actionsAndActivities = json.optString(
+                "actionsAndActivities",
+                base.actionsAndActivities
+            ),
+            freeActionsAndReactions = json.optString(
+                "freeActionsAndReactions",
+                base.freeActionsAndReactions
+            ),
+            campaignNotes = json.optString("campaignNotes", base.campaignNotes),
             ancestryFeats = stringList(json.optJSONArray("ancestryFeats")),
             classFeats = stringList(json.optJSONArray("classFeats")),
             skillFeats = stringList(json.optJSONArray("skillFeats")),
@@ -218,6 +300,20 @@ class CharacterStore(
             currencyGp = json.optInt("currencyGp", base.currencyGp),
             currencyPp = json.optInt("currencyPp", base.currencyPp)
         )
+    }
+
+    private fun intObject(values: Map<String, Int>): JSONObject =
+        JSONObject().apply {
+            values.forEach { (key, value) -> put(key, value) }
+        }
+
+    private fun stringIntMap(json: JSONObject?): Map<String, Int> {
+        if (json == null) return emptyMap()
+        val out = mutableMapOf<String, Int>()
+        json.keys().forEach { key ->
+            out[key] = json.optInt(key, 0)
+        }
+        return out
     }
 
     private fun intMap(json: JSONObject?): Map<Int, Int> {
