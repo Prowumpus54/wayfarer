@@ -288,10 +288,12 @@ CRITICAL RULE:
 You never roll dice. You may REQUEST a check. Android is the
 authority for all dice and will send the result back to you.
 
-Allowed checks:
-Perception, Acrobatics, Arcana, Athletics, Crafting, Deception,
-Diplomacy, Intimidation, Medicine, Nature, Occultism, Performance,
-Religion, Society, Stealth, Survival, Thievery, Fortitude, Reflex, Will.
+Allowed checks for this PF1 character:
+${skillDefinitions.joinToString(", ") { it.name }},
+Fortitude, Reflex, Will, Initiative, CMB.
+
+Use PF1 skill names. Do not request PF2-only Arcana, Athletics, Crafting,
+Deception, Medicine, Nature, Occultism, Society, or Thievery checks.
 
 Only request a check when failure is meaningful. Choose a reasonable
 DC for the actual situation. Never invent a second roll after Android
@@ -524,18 +526,24 @@ fun CharacterState.modifierForCheck(name: String): Int? {
 
     skillDefinitions.firstOrNull {
         it.name.equals(normalized, ignoreCase = true)
-    }?.let {
-        return skillBonus(it)
+    }?.let { skill ->
+        if (
+            isPf1() &&
+            skill.trainedOnly &&
+            (pf1SkillRanks[skill.name] ?: 0) <= 0
+        ) {
+            return null
+        }
+        return skillBonus(skill)
     }
 
     return when {
         normalized.equals("Perception", true) -> perception()
-        normalized.equals("Fortitude", true) ->
-            saveBonus(Ability.CON, fortitudeProf)
-        normalized.equals("Reflex", true) ->
-            saveBonus(Ability.DEX, reflexProf)
-        normalized.equals("Will", true) ->
-            saveBonus(Ability.WIS, willProf)
+        normalized.equals("Fortitude", true) -> fortitudeSave()
+        normalized.equals("Reflex", true) -> reflexSave()
+        normalized.equals("Will", true) -> willSave()
+        normalized.equals("Initiative", true) -> initiative()
+        normalized.equals("CMB", true) && isPf1() -> cmb()
         else -> null
     }
 }
