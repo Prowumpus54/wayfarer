@@ -541,7 +541,7 @@ object CombatRulesEngine {
             }
         }
 
-        val updated = applyDamage(character, damage)
+        val updated = applyDamage(character, damage, pf1 = true)
         val events = listOf(
             GameEvent(
                 "Enemy attack",
@@ -606,7 +606,7 @@ object CombatRulesEngine {
         ) damageRoller(creature.damageDice) else null
         val multiplier = if (attack.degree == Degree.CRITICAL_SUCCESS) 2 else 1
         val damage = (damageRoll?.total ?: 0) * multiplier
-        val updated = applyDamage(character, damage)
+        val updated = applyDamage(character, damage, pf1 = false)
         val outcome = when (attack.degree) {
             Degree.CRITICAL_SUCCESS -> "critical hit"
             Degree.SUCCESS -> "hit"
@@ -644,13 +644,24 @@ object CombatRulesEngine {
         )
     }
 
-    private fun applyDamage(character: CharacterState, damage: Int): CharacterState {
+    private fun applyDamage(
+        character: CharacterState,
+        damage: Int,
+        pf1: Boolean
+    ): CharacterState {
         if (damage <= 0) return character
         val absorbed = minOf(character.tempHp, damage)
         val hpDamage = (damage - absorbed).coerceAtLeast(0)
+        val hp = if (pf1) {
+            character.currentHp - hpDamage
+        } else {
+            (character.currentHp - hpDamage).coerceAtLeast(0)
+        }
         return character.copy(
             tempHp = (character.tempHp - absorbed).coerceAtLeast(0),
-            currentHp = (character.currentHp - hpDamage).coerceAtLeast(0)
+            currentHp = hp,
+            pf1Stable = if (pf1 && hp < 0) false else character.pf1Stable,
+            pf1Dead = pf1 && hp <= character.pf1DeathThreshold()
         )
     }
 
