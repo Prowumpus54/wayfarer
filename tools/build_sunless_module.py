@@ -214,8 +214,8 @@ def make_manifest():
     manifest = {
         "id": "sunless_citadel",
         "title": "The Sunless Citadel",
-        "version": "0.2.0",
-        "ruleset": "pf2e-adapted",
+        "version": "0.3.0",
+        "ruleset": "pf1e",
         "description": (
             "A lost fortress beneath the earth, rival tribes in its halls, "
             "and a dark mystery rooted in the Twilight Grove."
@@ -258,9 +258,9 @@ def build():
     metadata = [
         ("module_id", "sunless_citadel"),
         ("title", "The Sunless Citadel"),
-        ("module_version", "0.2.0"),
+        ("module_version", "0.3.0"),
         ("source_file", "The_Sunless_Citadel_3e.pdf"),
-        ("ruleset", "pf2e-adapted"),
+        ("ruleset", "pf1e"),
         ("source_ocr", "tesseract-5.4 single-pass"),
     ]
     db.executemany("INSERT INTO metadata(key,value) VALUES (?,?)", metadata)
