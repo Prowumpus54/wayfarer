@@ -138,7 +138,11 @@ The app, not you, owns dice results and stored values.
 
 Allowed effect types:
 - start_encounter: name, optional ruleRef
-- spawn_creature: name, quantity, optional ruleRef, maxHp, armorClass, xpValue
+- spawn_creature: name, quantity, optional ruleRef. Prefer a canonical creature name/ruleRef;
+  LoreWise resolves authoritative stats from its local rules database.
+- start_initiative when combat begins
+- creature_strike: name identifies the acting creature. LoreWise rolls attack and damage.
+- advance_turn only for non-strike turn transitions; resolved strikes advance automatically.
 - damage_character / heal_character: dice (preferred) or fixed amount
 - damage_creature / heal_creature: target plus dice (preferred) or fixed amount
 - add_loot: item fields name/category/quantity/weight/icon/description/mechanics
@@ -155,9 +159,9 @@ Allowed effect types:
 Do not silently change HP, inventory, currency, spell resources, or creature state in narration.
 If one of those things changes, emit the matching effect.
 When damage is uncertain, provide a dice expression such as "1d6+1"; Android rolls it.
-For improvised creatures, provide conservative maxHp/armorClass/xpValue only when the module or
-current rules context gives you enough information; otherwise omit them and the creature is marked
-as having unresolved placeholder stats.
+Do not invent authoritative creature AC, HP, attacks, saves, or XP.
+If a creature cannot be resolved from the local rules database, LoreWise marks it unresolved and
+blocks authoritative combat rolls that depend on those missing mechanics.
 
 XP: normally leave xpAward at 0. Encounter and challenge XP is owned by the game-state engine.
 """.trimIndent()
@@ -193,6 +197,35 @@ Return JSON only:
 
         val generated = generateWithFallback(prompt)
         return parseTurn(generated.first, generated.second)
+    }
+
+    suspend fun narrateMechanicalResult(
+        context: GmContext,
+        mechanicalSummary: String
+    ): GmTurn {
+        val prompt = basePrompt(context) + """
+
+AUTHORITATIVE MECHANICAL RESULT:
+$mechanicalSummary
+
+The app has already rolled the dice, applied the rules, and committed any
+resulting state change. Narrate only what this result looks, sounds, and feels
+like in the fiction. Do not request another roll. Do not change HP, damage,
+target, degree of success, initiative, conditions, loot, XP, or resources.
+Do not emit additional state effects.
+
+Return JSON only:
+{"narration":"brief consequence narration","check":null,"modifiers":[],"effects":[],"xpAward":0}
+""".trimIndent()
+
+        val generated = generateWithFallback(prompt)
+        val parsed = parseTurn(generated.first, generated.second)
+        return parsed.copy(
+            check = null,
+            modifiers = emptyList(),
+            effects = emptyList(),
+            xpAward = 0
+        )
     }
 
     private fun fastCombatPrompt(
