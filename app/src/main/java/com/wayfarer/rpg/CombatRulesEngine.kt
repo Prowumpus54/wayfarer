@@ -118,7 +118,7 @@ object CombatRulesEngine {
             " against " + target.name + ": d20 " + result.die +
             " + CMB " + result.modifier + " = " + result.total +
             " vs CMD " + target.cmd + " (" +
-            if (success) "success" else "failure" + ")."
+            (if (success) "success" else "failure") + ")."
 
         return CombatMechanicalResolution(
             CombatResolutionStatus.RESOLVED,
