@@ -20,6 +20,7 @@ Primary ruleset: Pathfinder 1e
 - debug/release App Check split and release cleartext restriction
 - Wise-standard documentation/metadata bootstrap and project-specific documentation
 - stale PF2 default removed from GameStateEngine; unused Firebase Storage dependency removed
+- PF1 character creation now clamps generated spells to legal slot/spells-known limits
 
 ## Verification currently completed
 - `testDebugUnitTest`: passed, 39 tests / 0 failures / 0 errors

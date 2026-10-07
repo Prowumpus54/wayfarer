@@ -213,6 +213,28 @@ Rules:
             if (ancestry.equals("Human", true)) 2 else 1
         )
 
+        val castingAbility = profile.castingAbility
+        val spellSlots = if (castingAbility != null) {
+            pf1SpellSlotsForClass(
+                className,
+                1,
+                abilities[castingAbility] ?: 10
+            )
+        } else {
+            emptyMap()
+        }
+        val knownLimits = pf1SpellsKnownLimit(className, 1)
+        val validatedSpells = spells.mapValues { (spellLevel, names) ->
+            val cap = knownLimits?.get(spellLevel)
+                ?: spellSlots[spellLevel]
+                ?: if (spellLevel == 0 && castingAbility != null) {
+                    names.size
+                } else {
+                    0
+                }
+            names.distinct().take(cap.coerceAtLeast(0))
+        }.filterValues { it.isNotEmpty() }
+
         return base.copy(
             playerName = "",
             characterName = json.optString("name")
@@ -259,9 +281,10 @@ Rules:
             genderPronouns = brief.pronouns,
             notes = json.optString("notes"),
             magicTradition = json.optString("magicTradition"),
-            castingType = json.optString("castingType"),
-            spellcastingAbility = profile.castingAbility ?: base.spellcastingAbility,
-            spells = spells
+            castingType = pf1CastingType(className),
+            spellcastingAbility = castingAbility ?: base.spellcastingAbility,
+            spellSlots = spellSlots,
+            spells = validatedSpells
         )
     }
     private fun parseInventory(array: JSONArray): List<InventoryItem> =

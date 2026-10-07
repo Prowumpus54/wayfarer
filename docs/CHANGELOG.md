@@ -12,6 +12,7 @@
 - Product-visible identity from Wayfarer to LoreWise.
 - Auto GM routing to local Gemma first when configured, with Gemini cloud fallback.
 - State-engine default ruleset now follows the active character.
+- PF1 character creation validates generated spell lists against class slot/spells-known limits.
 - Local LLM environment variables are LoreWise-first with legacy compatibility fallbacks.
 - Release builds disable cleartext traffic; debug keeps LAN local-model development support.
 
