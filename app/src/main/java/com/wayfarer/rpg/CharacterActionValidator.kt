@@ -5,32 +5,56 @@ data class CharacterActionDecision(val action: String? = null, val blocked: Bool
 object CharacterActionValidator {
     fun validate(request: String, character: CharacterState): CharacterActionDecision {
         val normalized = request.trim().lowercase()
-        if (listOf("smite", "power attack", "charge", "pf1", "pathfinder 1").any { it in normalized }) {
-            return CharacterActionDecision(blocked = true, explanation =
-                "PF1e action not saved: this character uses PF2e-adapted calculations. " +
-                "The sheet lacks PF1e base attack bonus, paladin class levels and Smite Evil resources. " +
-                "We cannot verify the requested combination against this sheet. " +
-                "A PF1e implementation must check feat prerequisites, the type of smite, weapon handling, " +
-                "target eligibility, remaining resources and the charge path before calculating any rolls. " +
-                "PF1e references: Archives of Nethys, Charge (Rules.aspx?ID=187), " +
-                "Paladin (legacy.aonprd.com/coreRuleBook/classes/paladin.html).")
+        if (
+            character.isPf1() &&
+            listOf("smite", "power attack", "charge").any { it in normalized }
+        ) {
+            return CharacterActionDecision(
+                blocked = true,
+                explanation =
+                    "PF1 action recognized, but this compound action is not saved as an " +
+                    "automatic shortcut yet. BAB/CMB/CMD and PF1 attack math are now " +
+                    "available, but Smite uses, feat prerequisites, charge movement, and " +
+                    "Power Attack choices must be represented explicitly before the app " +
+                    "can execute this combination without GM adjudication."
+            )
         }
         val match = Regex("(?:create|build|add) (?:a |an )?(.+?)(?: check)?(?: action)?[.!]?").matchEntire(normalized)
         if (match != null) {
             val name = match.groupValues[1]
             val skill = skillDefinitions.firstOrNull { it.name.equals(name, true) }
-            val canonical = skill?.name ?: "Perception".takeIf { name == "perception" }
+            val canonical = skill?.name ?: "Perception".takeIf {
+                name == "perception"
+            }
             if (canonical != null) {
-                val modifier = skill?.let(character::skillBonus) ?: character.perception()
-                return CharacterActionDecision(action = "$canonical check", explanation =
-                    "$canonical check: 1d20 ${if (modifier >= 0) "+" else ""}$modifier from the current sheet. " +
-                    "The GM must confirm the task, any training requirement, situational modifiers and DC. " +
-                    "This saves a check shortcut, not automatic permission to perform every use of the skill. " +
-                    "No damage or resource consumption. The modifier is recalculated from the sheet when used.")
+                if (
+                    character.isPf1() &&
+                    skill?.trainedOnly == true &&
+                    (character.pf1SkillRanks[skill.name] ?: 0) <= 0
+                ) {
+                    return CharacterActionDecision(
+                        blocked = true,
+                        explanation = canonical +
+                            " is trained-only in PF1 and this character has no ranks in it."
+                    )
+                }
+                val modifier = skill?.let(character::skillBonus)
+                    ?: character.perception()
+                return CharacterActionDecision(
+                    action = "$canonical check",
+                    explanation =
+                        "$canonical check: 1d20 " +
+                            (if (modifier >= 0) "+" else "") +
+                            "$modifier from the current PF1 sheet. " +
+                            "The GM supplies the situation and DC. The modifier is " +
+                            "recalculated from ability, ranks, class-skill bonus, armor " +
+                            "check penalty, and stored miscellaneous modifiers when used."
+                )
             }
             return CharacterActionDecision(blocked = true, explanation =
                 "This action is outside the current rules validator and was not saved. " +
-                "Supported examples: create a Perception check; create a Stealth check. " +
+                "Supported examples: create a Perception check; create a Stealth check; " +
+                "create a Knowledge (nature) check. " +
                 "Ask for advice about other actions without the create/build/add prefix.")
         }
         return CharacterActionDecision(explanation = "Advice request")
