@@ -49,12 +49,18 @@ class GameStateStore(
                     .put("maxHp", creature.maxHp)
                     .put("currentHp", creature.currentHp)
                     .put("armorClass", creature.armorClass)
+                    .put("touchArmorClass", creature.touchArmorClass)
+                    .put("flatFootedArmorClass", creature.flatFootedArmorClass)
+                    .put("cmb", creature.cmb)
+                    .put("cmd", creature.cmd)
                     .put("initiative", creature.initiative)
                     .put("initiativeBonus", creature.initiativeBonus)
                     .put("attackName", creature.attackName)
                     .put("attackBonus", creature.attackBonus)
                     .put("damageDice", creature.damageDice)
                     .put("damageType", creature.damageType)
+                    .put("criticalThreatMin", creature.criticalThreatMin)
+                    .put("criticalMultiplier", creature.criticalMultiplier)
                     .put("fortitude", creature.fortitude)
                     .put("reflex", creature.reflex)
                     .put("will", creature.will)
@@ -128,6 +134,16 @@ class GameStateStore(
                                 .coerceIn(0, maxHp),
                             armorClass = item.optInt("armorClass", 10)
                                 .coerceIn(1, 99),
+                            touchArmorClass = item.optInt(
+                                "touchArmorClass",
+                                item.optInt("armorClass", 10)
+                            ).coerceIn(1, 99),
+                            flatFootedArmorClass = item.optInt(
+                                "flatFootedArmorClass",
+                                item.optInt("armorClass", 10)
+                            ).coerceIn(1, 99),
+                            cmb = item.optInt("cmb", 0),
+                            cmd = item.optInt("cmd", 10),
                             initiative = if (item.isNull("initiative")) null
                                 else item.optInt("initiative"),
                             initiativeBonus = item.optInt("initiativeBonus", 0),
@@ -136,6 +152,14 @@ class GameStateStore(
                                 else item.optInt("attackBonus"),
                             damageDice = item.optString("damageDice"),
                             damageType = item.optString("damageType"),
+                            criticalThreatMin = item.optInt(
+                                "criticalThreatMin",
+                                20
+                            ).coerceIn(2, 20),
+                            criticalMultiplier = item.optInt(
+                                "criticalMultiplier",
+                                2
+                            ).coerceIn(2, 4),
                             fortitude = item.optInt("fortitude", 0),
                             reflex = item.optInt("reflex", 0),
                             will = item.optInt("will", 0),
