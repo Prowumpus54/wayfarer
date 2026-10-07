@@ -205,6 +205,7 @@ data class CharacterState(
     val focusCurrent: Int = 1,
     val focusMax: Int = 1,
     val spellSlots: Map<Int, Int> = emptyMap(),
+    val spellSlotsUsed: Map<Int, Int> = emptyMap(),
     val spells: Map<Int, List<String>> = emptyMap()
 ) {
     fun abilityModifier(ability: Ability): Int =
@@ -240,6 +241,9 @@ data class CharacterState(
         abilityModifier(spellcastingAbility) + spellProf.bonus(level)
 
     fun spellDc(): Int = 10 + spellAttack()
+
+    fun spellSlotsRemaining(level: Int): Int =
+        ((spellSlots[level] ?: 0) - (spellSlotsUsed[level] ?: 0)).coerceAtLeast(0)
 }
 enum class AppScreen(val label: String, val glyph: String) {
     Home("Home", "⌂"),
