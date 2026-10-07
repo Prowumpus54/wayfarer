@@ -31,6 +31,7 @@ data class GmTurn(
     val narration: String,
     val check: GmCheckRequest? = null,
     val modifiers: List<GmDiceModifier> = emptyList(),
+    val effects: List<GmEffect> = emptyList(),
     val xpAward: Int = 0,
     val raw: String = "",
     val modelName: String = ""
@@ -46,6 +47,8 @@ data class GmContext(
     val encounters: List<String>,
     val character: CharacterState,
     val party: List<PartyMember>,
+    val recentHistory: List<String>,
+    val runtimeState: List<String>,
     val action: String,
     val playerRoll: String? = null
 )
@@ -100,6 +103,7 @@ Return one JSON object only:
   "narration": "What happens immediately before any required roll.",
   "check": null,
   "modifiers": [],
+  "effects": [],
   "xpAward": 0
 }
 
@@ -127,9 +131,34 @@ IMPORTANT: modifierAdjustment and pushed modifiers are situational modifiers onl
 Never include the character's ability modifier, proficiency bonus, item bonus,
 or any bonus already represented by the character sheet; Android adds those.
 
-XP: set xpAward to 0 unless this turn completes a meaningful challenge,
-encounter, discovery, objective, or important social obstacle. Typical awards
-are 10-120 XP. Never award XP merely for making a roll or repeating an action.
+GAME STATE EFFECTS:
+Use "effects" only for concrete state changes that the app can validate and persist.
+The app, not you, owns dice results and stored values.
+
+Allowed effect types:
+- start_encounter: name, optional ruleRef
+- spawn_creature: name, quantity, optional ruleRef, maxHp, armorClass, xpValue
+- damage_character / heal_character: dice (preferred) or fixed amount
+- damage_creature / heal_creature: target plus dice (preferred) or fixed amount
+- add_loot: item fields name/category/quantity/weight/icon/description/mechanics
+- take_loot: name and quantity when the player explicitly takes known loot
+- add_item: item fields when an item is explicitly received outside encounter loot
+- add_currency: currency cp/sp/gp/pp, amount, optional target "loot"
+- apply_condition / remove_condition: target and condition
+- set_flag: flag for a durable discovered or changed world fact
+- start_challenge: name, description, dc, goal, xpValue
+- advance_challenge: amount
+- complete_challenge
+- complete_encounter
+
+Do not silently change HP, inventory, currency, spell resources, or creature state in narration.
+If one of those things changes, emit the matching effect.
+When damage is uncertain, provide a dice expression such as "1d6+1"; Android rolls it.
+For improvised creatures, provide conservative maxHp/armorClass/xpValue only when the module or
+current rules context gives you enough information; otherwise omit them and the creature is marked
+as having unresolved placeholder stats.
+
+XP: normally leave xpAward at 0. Encounter and challenge XP is owned by the game-state engine.
 """.trimIndent()
 
         val generated = generateWithFallback(prompt)
@@ -158,7 +187,7 @@ discovery, objective, or important social obstacle, you may award 10-120 XP.
 Otherwise xpAward must be 0. Never award XP merely for making the roll.
 
 Return JSON only:
-{"narration":"outcome narration","check":null,"modifiers":[],"xpAward":0}
+{"narration":"outcome narration","check":null,"modifiers":[],"effects":[],"xpAward":0}
 """.trimIndent()
 
         val generated = generateWithFallback(prompt)
@@ -191,6 +220,12 @@ WEAPONS: ${character.meleeWeapon}; ${character.rangedWeapon}
 
 RELEVANT ENCOUNTERS / HAZARDS:
 ${context.encounters.joinToString("\n")}
+
+AUTHORITATIVE RUNTIME STATE:
+${context.runtimeState.joinToString("\n").ifBlank { "No active encounter or challenge." }}
+
+RECENT GAME HISTORY:
+${context.recentHistory.joinToString("\n").ifBlank { "No prior turns are available." }}
 
 GM NOTES:
 ${context.gmNotes}
@@ -241,6 +276,12 @@ ${context.npcs.joinToString("; ")}
 
 ENCOUNTERS / HAZARDS IN THIS LOCATION:
 ${context.encounters.joinToString("\n")}
+
+AUTHORITATIVE RUNTIME STATE:
+${context.runtimeState.joinToString("\n").ifBlank { "No active encounter or challenge." }}
+
+RECENT GAME HISTORY (oldest to newest):
+${context.recentHistory.joinToString("\n").ifBlank { "No prior turns are available." }}
 
 Never reveal GM-only notes, hidden traps, undiscovered treasure, secret doors,
 or encounter information until player actions or rules justify discovery.
@@ -374,10 +415,47 @@ WEAPONS: ${character.meleeWeapon}; ${character.rangedWeapon}
                 }
             }
 
+            val effectsArray = json.optJSONArray("effects")
+            val effects = buildList {
+                if (effectsArray != null) {
+                    for (index in 0 until effectsArray.length().coerceAtMost(24)) {
+                        val item = effectsArray.optJSONObject(index) ?: continue
+                        val type = item.optString("type").trim()
+                        if (GmEffectType.fromWire(type) == null) continue
+                        add(
+                            GmEffect(
+                                type = type,
+                                target = item.optString("target"),
+                                name = item.optString("name"),
+                                ruleRef = item.optString("ruleRef"),
+                                quantity = item.optInt("quantity", 1).coerceIn(1, 999),
+                                amount = item.optInt("amount", 0).coerceIn(-1_000_000, 1_000_000),
+                                dice = item.optString("dice"),
+                                maxHp = item.optInt("maxHp", 0).coerceIn(0, 9999),
+                                armorClass = item.optInt("armorClass", 0).coerceIn(0, 99),
+                                xpValue = item.optInt("xpValue", 0).coerceIn(0, 1_000_000),
+                                condition = item.optString("condition"),
+                                currency = item.optString("currency"),
+                                level = item.optInt("level", 0).coerceIn(-2, 20),
+                                description = item.optString("description"),
+                                mechanics = item.optString("mechanics"),
+                                category = item.optString("category", "Other"),
+                                weight = item.optDouble("weight", 0.0).coerceAtLeast(0.0),
+                                icon = item.optString("icon", "🎒"),
+                                flag = item.optString("flag"),
+                                dc = item.optInt("dc", 0).coerceIn(0, 99),
+                                goal = item.optInt("goal", 1).coerceIn(1, 100)
+                            )
+                        )
+                    }
+                }
+            }
+
             GmTurn(
                 narration = narration,
                 check = check,
                 modifiers = modifiers,
+                effects = effects,
                 xpAward = json.optInt("xpAward", 0).coerceIn(0, 250),
                 raw = raw,
                 modelName = modelName
