@@ -292,6 +292,19 @@ data class CharacterState(
     fun pf1BaseSave(save: Pf1Save): Int =
         pf1BaseSave(effectivePf1ClassLevels(), save)
 
+    fun pf1DeathThreshold(): Int =
+        -(abilities[Ability.CON] ?: 10)
+
+    fun pf1HpState(): String =
+        when {
+            !isPf1() -> ""
+            pf1Dead || currentHp <= pf1DeathThreshold() -> "Dead"
+            currentHp < 0 && pf1Stable -> "Stable"
+            currentHp < 0 -> "Dying"
+            currentHp == 0 -> "Disabled"
+            else -> "Conscious"
+        }
+
     fun fortitudeSave(): Int =
         if (isPf1()) {
             pf1BaseSave(Pf1Save.FORTITUDE) + abilityModifier(Ability.CON) +
@@ -359,7 +372,8 @@ data class CharacterState(
 
     fun touchAc(): Int =
         if (isPf1()) {
-            10 + abilityModifier(Ability.DEX) + pf1SizeModifier(size) +
+            val dex = minOf(abilityModifier(Ability.DEX), armor().dexCap)
+            10 + dex + pf1SizeModifier(size) +
                 pf1DeflectionBonus + pf1DodgeBonus + pf1MiscAcBonus
         } else ac()
 
@@ -372,7 +386,7 @@ data class CharacterState(
 
     fun attackBonus(weapon: WeaponDefinition): Int {
         if (isPf1()) {
-            val ability = if (weapon.isRanged) Ability.DEX else Ability.STR
+            val ability = weapon.ability
             return baseAttackBonus() + abilityModifier(ability) +
                 pf1SizeModifier(size) + weapon.itemBonus + pf1AttackMiscBonus
         }
@@ -386,7 +400,11 @@ data class CharacterState(
                 abilityModifier(Ability.STR)
             } else 0
         }
-        val ability = if (weapon.isRanged) 0 else abilityModifier(Ability.STR)
+        val ability = if (weapon.ability == Ability.DEX) {
+            0
+        } else {
+            abilityModifier(Ability.STR)
+        }
         return ability + weapon.itemBonus + pf1DamageMiscBonus
     }
 
