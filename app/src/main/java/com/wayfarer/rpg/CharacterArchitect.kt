@@ -30,8 +30,9 @@ class CharacterArchitect {
     private fun buildPrompt(brief: CharacterBrief): String = """
 You are Wayfarer's character architect.
 
-Create one legal, easy-to-play Pathfinder 2e-adapted level 1 hero.
-Favor the player's fantasy over optimization, but make the build coherent.
+Create one easy-to-play Pathfinder 1e level 1 hero using a core class.
+Favor the player's fantasy over optimization. The app will recompute BAB, saves,
+HP, skills, AC, CMB/CMD, and spell resources; do not invent those derived numbers.
 The player does not want to manage rules manually.
 
 PLAYER BRIEF
@@ -50,19 +51,15 @@ Return JSON only:
 {
   "name": "",
   "ancestry": "",
-  "heritage": "",
   "background": "",
   "className": "",
-  "maxHp": 18,
   "keyAbility": "DEX",
   "abilities": {"STR":10,"DEX":10,"CON":10,"INT":10,"WIS":10,"CHA":10},
   "armorName": "",
   "meleeWeapon": "",
   "rangedWeapon": "",
-  "ancestryFeats": [],
-  "classFeats": [],
-  "skillFeats": [],
-  "generalFeats": [],
+  "feats": [],
+  "skillRanks": {"Perception":1,"Stealth":1},
   "spells": {"0": [], "1": []},
   "magicTradition": "",
   "castingType": "",
@@ -88,9 +85,13 @@ Return JSON only:
 
 Rules:
 - level is always 1.
-- ability scores should fit a level 1 PF2e-style hero.
+- className must be one of Barbarian, Bard, Cleric, Druid, Fighter, Monk, Paladin, Ranger, Rogue, Sorcerer, Wizard.
+- ancestry should be a PF1 core race; background is narrative only.
+- ability scores are final scores and should be plausible for a level 1 PF1 hero.
+- skillRanks values are 0 or 1 and should prioritize class skills.
 - give a small practical starter inventory.
-- choose feats and spells matching the concept.
+- suggest only a small number of core-style feats matching the concept; the app does not yet validate every feat prerequisite.
+- choose spells only if the selected class casts them at level 1.
 - nonmagical heroes may have no spells.
 - notes should be one short sentence describing how the hero feels to play.
 """.trimIndent()
@@ -125,12 +126,18 @@ Rules:
 
         val json = JSONObject(clean.substring(start, end + 1))
         val base = CharacterState(level = 1)
+        val className = supportedClass(
+            json.optString("className"),
+            base.className
+        )
+        val profile = pf1ClassProfile(className)
+            ?: pf1ClassProfile("Ranger")!!
         val abilityJson = json.optJSONObject("abilities")
         val abilities = Ability.entries.associateWith { ability ->
             abilityJson?.optInt(
                 ability.name,
                 base.abilities[ability] ?: 10
-            )?.coerceIn(8, 18)
+            )?.coerceIn(7, 20)
                 ?: (base.abilities[ability] ?: 10)
         }
 
@@ -142,24 +149,64 @@ Rules:
         val spells = mutableMapOf<Int, List<String>>()
         json.optJSONObject("spells")?.let { spellsJson ->
             spellsJson.keys().forEach { key ->
-                key.toIntOrNull()?.let { level ->
-                    spells[level] = stringList(
+                key.toIntOrNull()?.let { spellLevel ->
+                    spells[spellLevel] = stringList(
                         spellsJson.optJSONArray(key)
                     )
                 }
             }
         }
 
-        val hp = json.optInt("maxHp", 18).coerceIn(12, 30)
+        val ancestry = json.optString("ancestry", "Human")
+            .ifBlank { "Human" }
+        val intModifier = Math.floorDiv(
+            (abilities[Ability.INT] ?: 10) - 10,
+            2
+        )
+        val rankBudget = (
+            profile.skillRanksPerLevel + intModifier +
+                if (ancestry.equals("Human", true)) 1 else 0
+            ).coerceAtLeast(1)
+        val proposedRanks = mutableListOf<Pair<String, Int>>()
+        json.optJSONObject("skillRanks")?.let { skillJson ->
+            skillJson.keys().forEach { key ->
+                val canonical = skillDefinitions.firstOrNull {
+                    it.name.equals(key, true)
+                }?.name
+                if (canonical != null && skillJson.optInt(key, 0) > 0) {
+                    proposedRanks += canonical to 1
+                }
+            }
+        }
+        val skillRanks = proposedRanks
+            .distinctBy { it.first }
+            .sortedByDescending { it.first in profile.classSkills }
+            .take(rankBudget)
+            .toMap()
+
+        val conModifier = Math.floorDiv(
+            (abilities[Ability.CON] ?: 10) - 10,
+            2
+        )
+        val hp = (profile.hitDie + conModifier).coerceAtLeast(1)
+        val feats = stringList(json.optJSONArray("feats")).take(
+            if (ancestry.equals("Human", true)) 2 else 1
+        )
+
         return base.copy(
             playerName = "",
             characterName = json.optString("name")
                 .ifBlank { brief.name.ifBlank { "Hero" } },
-            ancestry = json.optString("ancestry", base.ancestry),
-            heritage = json.optString("heritage", base.heritage),
+            ruleset = GameRuleset.PF1E.wireName,
+            pf1SchemaVersion = Pf1CharacterMigration.CURRENT_SCHEMA_VERSION,
+            ancestry = ancestry,
+            heritage = "",
             background = json.optString("background", base.background),
-            className = json.optString("className", base.className),
+            className = className,
+            pf1ClassLevels = mapOf(className to 1),
+            pf1SkillRanks = skillRanks,
             level = 1,
+            xp = 0,
             maxHp = hp,
             currentHp = hp,
             abilities = abilities,
@@ -179,10 +226,10 @@ Rules:
                 json.optString("rangedWeapon"),
                 base.rangedWeapon
             ),
-            ancestryFeats = stringList(json.optJSONArray("ancestryFeats")),
-            classFeats = stringList(json.optJSONArray("classFeats")),
-            skillFeats = stringList(json.optJSONArray("skillFeats")),
-            generalFeats = stringList(json.optJSONArray("generalFeats")),
+            ancestryFeats = emptyList(),
+            classFeats = emptyList(),
+            skillFeats = emptyList(),
+            generalFeats = feats,
             inventory = items,
             appearance = json.optString("appearance"),
             attitude = json.optString("attitude"),
@@ -193,10 +240,7 @@ Rules:
             notes = json.optString("notes"),
             magicTradition = json.optString("magicTradition"),
             castingType = json.optString("castingType"),
-            spellcastingAbility = enumValue(
-                json.optString("spellcastingAbility"),
-                base.spellcastingAbility
-            ),
+            spellcastingAbility = profile.castingAbility ?: base.spellcastingAbility,
             spells = spells
         )
     }
@@ -232,6 +276,13 @@ Rules:
                 }
             }
         }
+    private fun supportedClass(raw: String, fallback: String): String {
+        val candidate = raw.trim()
+        return pf1ClassProfiles.values.firstOrNull {
+            it.name.equals(candidate, true)
+        }?.name ?: fallback
+    }
+
     private fun supportedWeapon(raw: String, fallback: String): String {
         val candidate = raw.trim()
         return weaponCatalog.firstOrNull {
