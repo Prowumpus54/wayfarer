@@ -19,5 +19,6 @@ class PlaySession {
     val pendingCheck = mutableStateOf<GmCheckRequest?>(null)
     val pendingContext = mutableStateOf<GmContext?>(null)
     val pendingActionEffects = mutableStateOf<List<GmEffect>>(emptyList())
+    val selectedTargetId = mutableStateOf<String?>(null)
     val gmDiceModifiers = mutableStateOf<List<GmDiceModifier>>(emptyList())
 }
