@@ -71,6 +71,12 @@ fun WayfarerApp() {
     val stateStore = remember(campaign.id) {
         CampaignStateStore(appContext, campaign.id)
     }
+    val gameStateStore = remember(campaign.id) {
+        GameStateStore(appContext, campaign.id)
+    }
+    var runtimeState by remember(campaign.id) {
+        mutableStateOf(gameStateStore.load())
+    }
     val characterStore = remember(campaign.id) {
         CharacterStore(appContext, campaign.id)
     }
@@ -257,6 +263,7 @@ fun WayfarerApp() {
                 campaignTitle = campaign.name,
                 currentLocation = currentLocation,
                 sceneContext = sceneContext,
+                runtimeState = runtimeState,
                 onAction = { action ->
                     addEvent(
                         GameEvent("Player action", action, "action")
@@ -268,6 +275,23 @@ fun WayfarerApp() {
                 recentEvents = events,
                 onGmReply = { reply ->
                     addEvent(GameEvent("Game Master", reply, "gm"))
+                },
+                onStateEffects = { effects ->
+                    val active = characters[selectedMember]
+                    val application = GameStateEngine.apply(
+                        character = active,
+                        runtime = runtimeState,
+                        effects = effects,
+                        location = currentLocation
+                    )
+                    if (application.character != active) {
+                        updateSelected(application.character)
+                    }
+                    if (application.runtime != runtimeState) {
+                        runtimeState = application.runtime
+                        gameStateStore.save(application.runtime)
+                    }
+                    application.events.forEach(::addEvent)
                 },
                 onXpAward = { amount ->
                     val active = characters[selectedMember]
