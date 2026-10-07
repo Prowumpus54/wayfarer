@@ -24,3 +24,12 @@ An `EncounterState` owns individually addressable `EncounterCreatureState` recor
 `GmEffect` is the structured bridge between GM narration and persisted game state. Supported mutations include encounter start/spawn, character/creature damage and healing, loot/item/currency changes, conditions, world flags, challenges, spell-resource spending and encounter completion. Random damage/healing may be expressed as dice notation and is rolled locally by `DiceEngine`.
 
 `CharacterStore` persists current/temp HP, dying/wounded, conditions, currency, focus resources, spell-slot capacity and usage, spells and inventory. These resource fields are required for GM/runtime state transitions to survive app restarts.
+
+
+### Combat state
+
+Resolved encounter creatures now retain initiative bonus, primary attack name/bonus/damage/type, Fortitude/Reflex/Will values and their canonical rules reference. `statsResolved=true` means the creature mechanics came from the local rules database; prose/model numbers alone do not establish that flag.
+
+`EncounterState.initiativeOrder` stores `CombatTurnEntry` records for the player and active creatures plus the current turn index and round. This state is serialized by `GameStateStore`, so initiative order survives process restarts.
+
+For the current PF2e-adapted ruleset, creature XP is derived from creature level relative to active character level when a trusted creature profile is resolved. PF1e XP/CR calculations are intentionally not substituted into this schema.
