@@ -9,7 +9,7 @@
     "packageId": "com.wayfarer.rpg",
     "defaultStableBranch": "main",
     "integrationBranch": "develop",
-    "activeBranch": "integration/lorewise-wise-standard"
+    "activeBranch": "main"
   },
   "documentation": {
     "startHere": "docs/INDEX.md",

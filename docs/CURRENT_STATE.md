@@ -3,7 +3,7 @@
 Last updated: 2026-10-07
 
 ## Active engineering slice
-Branch: `integration/lorewise-wise-standard`
+Branch: `main` (reconciled from `integration/lorewise-wise-standard`)
 
 Goal: integrate the completed PF1 conversion with the LoreWise/Gemma rename work, remove stale assumptions, and adopt the Wise Engineering Standard without breaking existing installs or save data.
 
@@ -22,7 +22,7 @@ Primary ruleset: Pathfinder 1e
 - stale PF2 default removed from GameStateEngine; unused Firebase Storage dependency removed
 
 ## Verification currently completed
-- `testDebugUnitTest`: passed, 35 tests / 0 failures / 0 errors
+- `testDebugUnitTest`: passed, 39 tests / 0 failures / 0 errors
 - `lintDebug`: passed with 0 errors; 21 non-blocking warnings remain
 - `assembleDebug`: passed; debug APK produced
 - `assembleRelease`: passed; release variant compiles/assembles with Play Integrity source set
@@ -32,6 +32,7 @@ Primary ruleset: Pathfinder 1e
 - `git diff --check`: passed
 - Emulator: not run on this integration branch
 - Physical device: not run on this integration branch
+- Main reconciliation: complete; pre-reconcile dirty state preserved on `backup/main-dirty-before-lorewise-reconcile-20261007`
 - Production deployment: not performed
 
 ## Active risks
