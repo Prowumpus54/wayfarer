@@ -38,9 +38,28 @@ data class ModuleNpcSummary(
 )
 
 data class ModuleEncounterSummary(
+    val id: String,
     val name: String,
     val difficulty: String,
     val triggerText: String,
+    val gmNotes: String
+)
+
+data class ModuleEncounterCreatureSummary(
+    val encounterId: String,
+    val creatureRuleRef: String,
+    val quantity: Int,
+    val role: String,
+    val overridesJson: String
+)
+
+data class ModuleTreasureSummary(
+    val id: String,
+    val name: String,
+    val ruleRef: String,
+    val quantity: Int,
+    val hidden: Boolean,
+    val requirementsJson: String,
     val gmNotes: String
 )
 
@@ -54,7 +73,9 @@ data class ModuleSceneContext(
     val location: ModuleLocation,
     val destinations: List<ModuleDestination>,
     val npcs: List<ModuleNpcSummary>,
-    val encounters: List<ModuleEncounterSummary>
+    val encounters: List<ModuleEncounterSummary>,
+    val encounterCreatures: List<ModuleEncounterCreatureSummary>,
+    val treasure: List<ModuleTreasureSummary>
 )
 
 class AdventureModuleRepository(
@@ -186,16 +207,82 @@ class AdventureModuleRepository(
         return try {
             val out = mutableListOf<ModuleEncounterSummary>()
             db.rawQuery(
-                """SELECT name,difficulty,trigger_text,gm_notes
+                """SELECT id,name,difficulty,trigger_text,gm_notes
                    FROM encounters WHERE location_id=? ORDER BY id""".trimIndent(),
                 arrayOf(locationId)
             ).use { cursor ->
                 while (cursor.moveToNext()) {
                     out += ModuleEncounterSummary(
-                        name = cursor.getString(0),
-                        difficulty = cursor.getString(1) ?: "",
-                        triggerText = cursor.getString(2) ?: "",
-                        gmNotes = cursor.getString(3) ?: ""
+                        id = cursor.getString(0),
+                        name = cursor.getString(1),
+                        difficulty = cursor.getString(2) ?: "",
+                        triggerText = cursor.getString(3) ?: "",
+                        gmNotes = cursor.getString(4) ?: ""
+                    )
+                }
+            }
+            out
+        } finally {
+            db.close()
+        }
+    }
+
+    fun encounterCreaturesAt(
+        moduleId: String,
+        locationId: String
+    ): List<ModuleEncounterCreatureSummary> {
+        val db = openModule(moduleId) ?: return emptyList()
+        return try {
+            val out = mutableListOf<ModuleEncounterCreatureSummary>()
+            db.rawQuery(
+                """SELECT ec.encounter_id,ec.creature_rule_ref,ec.quantity,
+                          ec.role,ec.overrides_json
+                   FROM encounter_creatures ec
+                   JOIN encounters e ON e.id=ec.encounter_id
+                   WHERE e.location_id=?
+                   ORDER BY ec.encounter_id,ec.creature_rule_ref""".trimIndent(),
+                arrayOf(locationId)
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    out += ModuleEncounterCreatureSummary(
+                        encounterId = cursor.getString(0),
+                        creatureRuleRef = cursor.getString(1) ?: "",
+                        quantity = cursor.getInt(2).coerceAtLeast(1),
+                        role = cursor.getString(3) ?: "",
+                        overridesJson = cursor.getString(4) ?: "{}"
+                    )
+                }
+            }
+            out
+        } finally {
+            db.close()
+        }
+    }
+
+    fun treasureAt(
+        moduleId: String,
+        locationId: String
+    ): List<ModuleTreasureSummary> {
+        val db = openModule(moduleId) ?: return emptyList()
+        return try {
+            val out = mutableListOf<ModuleTreasureSummary>()
+            db.rawQuery(
+                """SELECT id,name,rule_ref,quantity,hidden,
+                          requirements_json,gm_notes
+                   FROM treasure
+                   WHERE location_id=?
+                   ORDER BY id""".trimIndent(),
+                arrayOf(locationId)
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    out += ModuleTreasureSummary(
+                        id = cursor.getString(0),
+                        name = cursor.getString(1),
+                        ruleRef = cursor.getString(2) ?: "",
+                        quantity = cursor.getInt(3).coerceAtLeast(1),
+                        hidden = cursor.getInt(4) != 0,
+                        requirementsJson = cursor.getString(5) ?: "[]",
+                        gmNotes = cursor.getString(6) ?: ""
                     )
                 }
             }
@@ -211,7 +298,9 @@ class AdventureModuleRepository(
             location = location,
             destinations = destinations(moduleId, locationId),
             npcs = npcsAt(moduleId, locationId),
-            encounters = encountersAt(moduleId, locationId)
+            encounters = encountersAt(moduleId, locationId),
+            encounterCreatures = encounterCreaturesAt(moduleId, locationId),
+            treasure = treasureAt(moduleId, locationId)
         )
     }
 
