@@ -20,8 +20,8 @@ android {
         applicationId 'com.wayfarer.rpg'
         minSdk 26
         targetSdk 36
-        versionCode 17
-        versionName '0.13.0'
+        versionCode 18
+        versionName '0.13.1'
         buildConfigField 'String', 'LOCAL_LLM_URL', '"' + localLlmUrl + '"'
         buildConfigField 'String', 'LOCAL_LLM_TOKEN', '"' + localLlmToken + '"'
     }
