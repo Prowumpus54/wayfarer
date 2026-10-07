@@ -44,17 +44,7 @@ object CombatRulesEngine {
                 character = character,
                 target = target,
                 actionText = actionText,
-                d20Roller = { modifier, dc ->
-                    if (d20Roller === DiceEngine::d20) {
-                        DiceEngine.pf1Check(
-                            modifier,
-                            dc,
-                            automaticOnNatural = true
-                        )
-                    } else {
-                        d20Roller(modifier, dc)
-                    }
-                },
+                d20Roller = d20Roller,
                 damageRoller = damageRoller
             )
             isPf2Adapted(ruleset) -> resolvePf2PlayerStrike(
@@ -531,27 +521,11 @@ object CombatRulesEngine {
         d20Roller: (Int, Int) -> CheckResult,
         damageRoller: (String) -> DiceRollResult?
     ): CreatureTurnResolution {
-        val attack = if (d20Roller === DiceEngine::d20) {
-            DiceEngine.pf1Check(
-                creature.attackBonus ?: 0,
-                character.ac(),
-                automaticOnNatural = true
-            )
-        } else {
-            d20Roller(creature.attackBonus ?: 0, character.ac())
-        }
+        val attack = d20Roller(creature.attackBonus ?: 0, character.ac())
         val hit = pf1AttackHits(attack)
         val threatens = hit && attack.die >= creature.criticalThreatMin
         val confirmation = if (threatens) {
-            if (d20Roller === DiceEngine::d20) {
-                DiceEngine.pf1Check(
-                    creature.attackBonus ?: 0,
-                    character.ac(),
-                    automaticOnNatural = true
-                )
-            } else {
-                d20Roller(creature.attackBonus ?: 0, character.ac())
-            }
+            d20Roller(creature.attackBonus ?: 0, character.ac())
         } else null
         val confirmed = confirmation?.let(::pf1AttackHits) == true
         val rolls = if (confirmed) creature.criticalMultiplier else 1
