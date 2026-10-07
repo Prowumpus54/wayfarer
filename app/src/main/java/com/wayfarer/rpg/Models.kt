@@ -186,6 +186,8 @@ data class CharacterState(
     val tempHp: Int = 0,
     val dying: Int = 0,
     val wounded: Int = 0,
+    val pf1Stable: Boolean = false,
+    val pf1Dead: Boolean = false,
     val perceptionProf: Proficiency = Proficiency.TRAINED,
     val fortitudeProf: Proficiency = Proficiency.TRAINED,
     val reflexProf: Proficiency = Proficiency.EXPERT,
