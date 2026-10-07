@@ -30,6 +30,7 @@ data class DiceRollResult(
 
 object DiceEngine {
     private val rng = SecureRandom()
+    private val notation = Regex("""^\s*(\d{1,2})d(\d{1,4})(?:\s*([+-])\s*(\d{1,5}))?\s*$""", RegexOption.IGNORE_CASE)
 
     fun roll(
         sides: Int,
@@ -46,6 +47,20 @@ object DiceEngine {
             modifier = modifier,
             total = dice.sum() + modifier
         )
+    }
+
+    fun rollNotation(expression: String): DiceRollResult? {
+        if (expression.isBlank()) return null
+        val match = notation.matchEntire(expression) ?: return null
+        val count = match.groupValues[1].toIntOrNull()?.coerceIn(1, 20) ?: return null
+        val sides = match.groupValues[2].toIntOrNull()?.coerceIn(2, 1000) ?: return null
+        val magnitude = match.groupValues[4].toIntOrNull()?.coerceIn(0, 100_000) ?: 0
+        val modifier = when (match.groupValues[3]) {
+            "-" -> -magnitude
+            "+" -> magnitude
+            else -> 0
+        }
+        return roll(sides = sides, count = count, modifier = modifier)
     }
 
     fun d20(modifier: Int, dc: Int): CheckResult {
