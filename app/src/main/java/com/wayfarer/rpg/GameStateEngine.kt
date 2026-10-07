@@ -325,17 +325,21 @@ object GameStateEngine {
                 GmEffectType.DAMAGE_CHARACTER -> {
                     val damage = resolvedAmount(effect)
                     if (damage > 0) {
-                        val absorbed = minOf(nextCharacter.tempHp, damage)
-                        val hpDamage = (damage - absorbed).coerceAtLeast(0)
-                        nextCharacter = nextCharacter.copy(
-                            tempHp = (nextCharacter.tempHp - absorbed).coerceAtLeast(0),
-                            currentHp = (nextCharacter.currentHp - hpDamage).coerceAtLeast(0)
+                        nextCharacter = applyCharacterDamage(
+                            nextCharacter,
+                            damage,
+                            ruleset
                         )
                         events += GameEvent(
                             "Damage taken",
                             nextCharacter.characterName + " took " + damage +
                                 " damage and is at " + nextCharacter.currentHp +
-                                "/" + nextCharacter.maxHp + " HP.",
+                                "/" + nextCharacter.maxHp + " HP" +
+                                if (nextCharacter.isPf1()) {
+                                    " (" + nextCharacter.pf1HpState() + ")."
+                                } else {
+                                    "."
+                                },
                             "state"
                         )
                     }
@@ -346,13 +350,20 @@ object GameStateEngine {
                     if (healing > 0) {
                         nextCharacter = nextCharacter.copy(
                             currentHp = (nextCharacter.currentHp + healing)
-                                .coerceAtMost(nextCharacter.maxHp)
+                                .coerceAtMost(nextCharacter.maxHp),
+                            pf1Stable = false,
+                            pf1Dead = false
                         )
                         events += GameEvent(
                             "HP restored",
                             nextCharacter.characterName + " recovered " + healing +
                                 " HP and is at " + nextCharacter.currentHp +
-                                "/" + nextCharacter.maxHp + " HP.",
+                                "/" + nextCharacter.maxHp + " HP" +
+                                if (nextCharacter.isPf1()) {
+                                    " (" + nextCharacter.pf1HpState() + ")."
+                                } else {
+                                    "."
+                                },
                             "state"
                         )
                     }
@@ -734,6 +745,26 @@ object GameStateEngine {
             lines += "World flags: " + runtime.worldFlags.sorted().joinToString("; ")
         }
         return lines
+    }
+
+    private fun applyCharacterDamage(
+        character: CharacterState,
+        damage: Int,
+        ruleset: String
+    ): CharacterState {
+        val absorbed = minOf(character.tempHp, damage)
+        val hpDamage = (damage - absorbed).coerceAtLeast(0)
+        val hp = if (GameRuleset.fromWire(ruleset) == GameRuleset.PF1E) {
+            character.currentHp - hpDamage
+        } else {
+            (character.currentHp - hpDamage).coerceAtLeast(0)
+        }
+        return character.copy(
+            tempHp = (character.tempHp - absorbed).coerceAtLeast(0),
+            currentHp = hp,
+            pf1Stable = if (hp < 0) false else character.pf1Stable,
+            pf1Dead = character.isPf1() && hp <= character.pf1DeathThreshold()
+        )
     }
 
     private fun pf2CreatureXp(creatureLevel: Int, partyLevel: Int): Int =
