@@ -4,6 +4,8 @@ enum class CombatResolutionStatus {
     RESOLVED,
     NEED_TARGET,
     NEED_VALIDATED_STATS,
+    NEED_INITIATIVE,
+    NOT_PLAYER_TURN,
     NO_ACTIVE_ENCOUNTER,
     UNSUPPORTED_RULESET
 }
@@ -42,6 +44,26 @@ object CombatRulesEngine {
                 CombatResolutionStatus.NO_ACTIVE_ENCOUNTER,
                 "There is no active encounter to attack."
             )
+
+        if (encounter.initiativeOrder.isEmpty()) {
+            return CombatMechanicalResolution(
+                status = CombatResolutionStatus.NEED_INITIATIVE,
+                summary = "Initiative must be rolled before the attack resolves.",
+                effects = listOf(
+                    GmEffect(type = GmEffectType.START_INITIATIVE.wireName)
+                )
+            )
+        }
+
+        val currentTurn = encounter.initiativeOrder
+            .getOrNull(encounter.currentTurnIndex)
+        if (currentTurn?.actorType != CombatActorType.PLAYER) {
+            return CombatMechanicalResolution(
+                CombatResolutionStatus.NOT_PLAYER_TURN,
+                "It is " + (currentTurn?.name ?: "another combatant") +
+                    "'s turn."
+            )
+        }
 
         val target = resolveTarget(
             encounter = encounter,
@@ -91,11 +113,6 @@ object CombatRulesEngine {
         }
 
         val effects = buildList {
-            add(
-                GmEffect(
-                    type = GmEffectType.START_INITIATIVE.wireName
-                )
-            )
             if (damage > 0) {
                 add(
                     GmEffect(
@@ -223,6 +240,20 @@ object CombatRulesEngine {
             )
         }
         val creature = encounter.creatures[index]
+        val currentTurn = encounter.initiativeOrder
+            .getOrNull(encounter.currentTurnIndex)
+        if (encounter.initiativeOrder.isNotEmpty() &&
+            (currentTurn?.actorType != CombatActorType.CREATURE ||
+                currentTurn.actorId != creature.id)
+        ) {
+            return CreatureTurnResolution(
+                character,
+                encounter,
+                emptyList(),
+                "Creature strike blocked: it is " +
+                    (currentTurn?.name ?: "another combatant") + "'s turn."
+            )
+        }
         if (!creature.statsResolved || creature.attackBonus == null ||
             creature.damageDice.isBlank()
         ) {
