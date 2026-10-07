@@ -45,7 +45,7 @@ fun WayfarerApp() {
                 id = moduleId,
                 title = "The Sunless Citadel",
                 version = "0",
-                ruleset = "pf2e-adapted",
+                ruleset = "pf1e",
                 description = "A buried fortress and the mystery beneath Oakhurst.",
                 startingLocation = "oakhurst",
                 minLevel = 1,
@@ -289,7 +289,16 @@ fun WayfarerApp() {
                         effects = effects,
                         location = currentLocation,
                         ruleset = manifest.ruleset,
-                        creatureResolver = rulesRepo::findCreatureCombatProfile
+                        creatureResolver = { query ->
+                            if (
+                                GameRuleset.fromWire(manifest.ruleset) ==
+                                GameRuleset.PF1E
+                            ) {
+                                Pf1CreatureCatalog.resolve(query)
+                            } else {
+                                rulesRepo.findCreatureCombatProfile(query)
+                            }
+                        }
                     )
                     if (application.character != active) {
                         updateSelected(application.character)
