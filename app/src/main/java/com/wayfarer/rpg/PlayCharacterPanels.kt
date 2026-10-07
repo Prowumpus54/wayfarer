@@ -273,9 +273,18 @@ private fun ColumnScope.SpellsList(
     ) {
         items(spells.size) { index ->
             val (rank, spell) = spells[index]
+            val resourceLabel = when {
+                rank == 0 -> "Cantrip • no slot"
+                rank == -1 -> "Innate spell"
+                rank == -2 -> "Focus • " + character.focusCurrent + "/" + character.focusMax
+                rank > 0 -> "Rank " + rank + " • " +
+                    character.spellSlotsRemaining(rank) + "/" +
+                    (character.spellSlots[rank] ?: 0) + " slots"
+                else -> "Spell"
+            }
             PlayPanelRow(
                 "✦ " + spell,
-                if (rank == 0) "Cantrip" else "Rank " + rank
+                resourceLabel
             ) {
                 onAction("I cast " + spell + ".")
             }
