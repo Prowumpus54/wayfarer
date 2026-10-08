@@ -132,6 +132,17 @@ fun PlayScreen(
         val clean = text.trim()
         if (clean.isEmpty() || gmBusy || pendingCheck != null) return
 
+        MechanicsAssistant.answer(character, clean)?.let { answer ->
+            if (logAction) onAction(character.characterName + ": " + clean)
+            lastAction = clean
+            input = ""
+            gmNarration = answer
+            gmNarration?.let(onGmReply)
+            gmStatus = "Android PF1 mechanics"
+            // Read-only questions do not consume a pending player roll or resource.
+            return
+        }
+
         val castSpellName = clean
             .takeIf { it.startsWith("I cast ", ignoreCase = true) }
             ?.substring(7)
