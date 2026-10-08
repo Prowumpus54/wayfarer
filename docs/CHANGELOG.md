@@ -1,13 +1,32 @@
 # Changelog
 
-## Unreleased factory/ondevice-ai - 2026-10-07
+## 0.14.0 — 2026-10-07 — GM/context and on-device AI integration
 
-- Added Android on-device Gemma using Google LiteRT-LM 0.18.0 and private model import/status.
-- Renamed the HTTP/Tailscale route to Desktop Gemma; Auto now tries on-device, desktop, Flash, then Lite.
-- Explicit selections never change providers. Answering routes are recorded, and player-roll prompts are preserved across Auto attempts.
-- Added fake-runtime routing and model-store regression tests; no model weights or app-version change.
-- Aligned Kotlin Android/Compose compiler plugins to 2.4.0 for LiteRT-LM metadata compatibility.
-- See `ON_DEVICE_AI.md` for license/import and physical-device verification boundaries.
+### Added
+- True on-device Gemma inference through Google LiteRT-LM 0.18.0 with app-private model import/status.
+- Read-only Fourth Wall / Meta Chat, Context Inspector, and complete AI transcript viewer.
+- Wise 1.1 app-level transcript journals with offline queue/retry, provider/model/latency/routing data, effective context snapshots, proposed effects, and applied state changes.
+- Deterministic PF1 mechanics assistant and complete character-mechanics projection for GM context.
+- Separate hard GM system prompt and swappable tone/length/pacing profiles with repetition memory.
+
+### Changed
+- GM routing is now explicit and truthful: Auto -> On-device Gemma -> configured Desktop Gemma -> Gemini Flash -> Gemini Lite.
+- Explicit GM choices never silently switch providers.
+- Authoritative location transitions are validated/persisted by Android instead of being inferred from narration.
+- GM context now uses current authoritative scene/state, compact deduplicated recent history, rolling older-history summary, and relevant module data instead of the old 24-event/raw-module payload.
+- Desktop Gemma is now named distinctly from on-device inference.
+- Bumped Android version to 0.14.0 / version code 19.
+
+### Fixed
+- "What spells can I cast?" and similar mechanics questions now resolve from authoritative character state rather than atmospheric narration.
+- Free-text movement such as "I'll climb down the ravine" can resolve a unique connected destination without leaving authoritative state stale.
+- Context Inspector and transcripts use the same authoritative context assembly as normal GM turns.
+- Transcript secrets are recursively redacted before persistence or desktop upload.
+
+### Verification
+- 87 Android unit tests passed with 0 failures/errors/skips.
+- `lintDebug`, `assembleDebug`, `assembleRelease`, gateway transcript tests, Python syntax checks, and the integrated unit suite passed for the 0.14.0 candidate.
+- Physical-device smoke testing remains the next release gate.
 
 ## 0.13.1 — 2026-10-07 — local GM transport fix
 

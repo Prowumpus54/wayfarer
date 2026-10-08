@@ -22,6 +22,6 @@ Primary automated command:
 
 ## Core unit coverage
 
-Tests cover action validation, authoritative combat resolution, creature parsing/catalog behavior, runtime game-state effects, Jev routing policy, PF1 combat rules, and PF1 character/caster progression.
+Tests cover action validation, authoritative combat resolution, creature parsing/catalog behavior, runtime game-state effects, Jev routing policy, PF1 combat rules, PF1 character/caster progression, authoritative location/context assembly, mechanics-question routing, on-device/Desktop/Cloud GM routing, system/tone/repetition controls, transcript redaction/persistence/offline retry, and read-only Meta Chat behavior.
 
 Verification results belong in `CURRENT_STATE.md`; do not infer device or production verification from a successful Gradle build.

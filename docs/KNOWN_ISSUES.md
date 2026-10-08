@@ -13,7 +13,7 @@ Status: contained. The bundled rules SQLite is PF2 legacy reference content. PF1
 Status: intentional compatibility debt. Package ID, Firebase project identity, storage namespaces, rules asset names, the GitHub repository slug, and some filesystem paths still contain Wayfarer. Rename only with a versioned migration plan.
 
 ## LW-005 — Device/release verification
-Status: pending. The current integration branch requires emulator/physical-device smoke testing after the automated gate, including local Gemma fallback and Diagnostics UI.
+Status: pending. LoreWise 0.14.0 requires physical Pixel smoke testing after the automated gate: app upgrade/save compatibility, on-device Gemma model import/load/inference, explicit Desktop/Cloud routing behavior, authoritative movement, PF1 mechanics questions, Fourth Wall / Context Inspector, transcript viewer/mirror, and Diagnostics UI.
 
 ## LW-006 — Gradle deprecations
 Status: open. Gradle reports deprecated features that will require cleanup before moving to Gradle 9.

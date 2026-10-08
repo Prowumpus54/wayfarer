@@ -39,11 +39,14 @@
   },
   "llmObservability": {
     "requiredWhenLlmUsed": true,
-    "transcriptReadableFromDesktop": false,
+    "transcriptReadableFromDesktop": true,
     "offlineQueueRequired": true,
     "redactionRequired": true,
     "implementation": [
-      "local-llm/gateway.py (local Gemma transcript mirror)"
+      "app/src/main/java/com/wayfarer/rpg/AiTranscripts.kt",
+      "app/src/main/java/com/wayfarer/rpg/TranscriptRuntime.kt",
+      "app/src/main/java/com/wayfarer/rpg/MetaObservabilityScreen.kt",
+      "local-llm/gateway.py (authenticated desktop transcript ingest/mirror)"
     ]
   },
   "verification": {

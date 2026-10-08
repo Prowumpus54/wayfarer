@@ -109,9 +109,9 @@ class AiTranscriptsTest {
             listOf("Mayor"), listOf("Challenge"), listOf("Coins"), CharacterState(),
             emptyList(), listOf("History"), listOf("Runtime"), "Action")
         val snapshot = context.snapshot()
-        assertEquals(listOf("authoritative_location", "recent_history", "character_party",
-            "module_scene", "runtime_state", "encounters_challenges", "hidden_gm_context"),
-            snapshot.categories.map { it.key })
+        assertEquals(listOf("authoritative_location", "recent_history", "older_history",
+            "character_party", "module_scene", "runtime_state", "encounters_challenges",
+            "hidden_gm_context"), snapshot.categories.map { it.key })
         snapshot.categories.forEach { assertTrue(snapshot.render().contains(it.content)) }
         assertTrue(snapshot.categories.last().hidden)
         assertTrue(snapshot.render().contains("Hidden door"))
