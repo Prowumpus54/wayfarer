@@ -5,6 +5,15 @@
 2. Run emulator and Pixel device smoke tests for existing-save migration, PF1 combat, local Gemma, Gemini fallback, and Diagnostics.
 3. Verify signed release App Check with Play Integrity.
 
+## Near-term map and visual engine
+- Build authoritative world graph and persistent current-room state for Oakhurst -> Old Road -> Ravine -> Citadel entry.
+- Add exploration map rendering, discovery/fog, party and creature tokens, and local visual asset packs.
+- Add tactical 5-foot-grid mode using the same MapState.
+- Add weapon-family and spell-family live effects after mechanics resolve.
+- Build desktop AssetBuildPipeline and BuildWise/Tailscale development sync for generated art packs.
+- Add deterministic procedural room generation driven by reusable theme packs plus optional map-specific accent packs.
+- Use `VISUAL_MAP_ASSET_ARCHITECTURE.md` as the implementation contract.
+
 ## Near-term rules depth
 - Expand PF1 feat, spell, equipment, condition, and creature coverage beyond the bounded core catalog.
 - Add deterministic validation for more class features and prerequisite chains.

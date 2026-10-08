@@ -14,6 +14,10 @@ Top-level content must use system-bar-safe layout behavior. No title, menu contr
 
 Play shows campaign/location context, Game Master status, recent events, runtime encounter/challenge state, character actions, dice, and bounded side panels. Model status distinguishes On-device Gemma, Desktop Gemma, Gemini Flash/Lite, rules-resolved, and error states. The model picker exposes private Gemma import and NOT_INSTALLED/INSTALLED/LOADING/READY/ERROR lifecycle status. Auto alone crosses providers; explicit selections fail clearly. See `ON_DEVICE_AI.md`.
 
+## Map
+
+Map is a live campaign view backed by authoritative map state, not a static illustration. Exploration mode shows discovered rooms/areas, routes, party position, fog of war, and player-visible encounter state. Tactical mode adds a 5-foot grid, exact token footprints, targeting, movement, ranges, and effect overlays. Missing generated art must fall back to functional schematic visuals without blocking play.
+
 ## Diagnostics
 
 Diagnostics shows event count, error count, slow-operation count, slowest operation, newest-first history, refresh, copy-report, and clear-with-confirmation.
