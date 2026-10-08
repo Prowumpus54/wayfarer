@@ -12,6 +12,7 @@ LoreWise is a single Android application with local persistence, bundled rules/m
 - `GeminiGameMaster.kt` handles narration/adjudication. Local Gemma is preferred when configured; Gemini is fallback.
 - `JevCombatClient.kt` classifies bounded combat intent; Android still owns the final mechanics.
 - `Diagnostics.kt` records bounded sanitized operational evidence. `DiagnosticsScreen.kt` exposes it in-app.
+- The planned map/visual subsystem is specified in `VISUAL_MAP_ASSET_ARCHITECTURE.md`: MapStateEngine owns authoritative geometry/location/discovery, while MapRenderEngine, VisualAssetEngine, EffectEngine, and the desktop AssetBuildPipeline remain presentation/infrastructure layers.
 
 ## Persistence
 
