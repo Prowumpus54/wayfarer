@@ -12,7 +12,7 @@ class MechanicsAssistantTest {
     @Test fun rangerSpellQuestionBypassesNarrativeGenerator() = runBlocking {
         val context = GmContext("test", "", "", "", emptyList(), emptyList(), emptyList(),
             emptyList(), ranger(), emptyList(), emptyList(), emptyList(), "what spells can I cast?")
-        val turn = GeminiGameMaster(GmModelChoice.LOCAL).adjudicate(context)
+        val turn = GeminiGameMaster(GmModelChoice.DESKTOP).adjudicate(context)
         assertEquals("Android PF1 mechanics", turn.modelName)
         assertTrue(turn.narration.contains("Entangle"))
         assertTrue(turn.narration.contains("remaining=1, total=2, used=1"))
