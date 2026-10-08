@@ -470,6 +470,8 @@ enum class AppScreen(val label: String, val glyph: String) {
     Journal("Journal", "▤"),
     Glossary("Glossary", "⌕"),
     Party("Party", "♟"),
+    Meta("Fourth Wall", "◇"),
+    Transcripts("Transcripts", "▥"),
     Diagnostics("Diagnostics", "⚙")
 }
 

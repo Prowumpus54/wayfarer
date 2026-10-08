@@ -18,14 +18,29 @@ data class CharacterBrief(
 )
 
 class CharacterArchitect {
+    var transcriptId: String = ""
+        private set
     private val modelNames = listOf(
         "gemini-3.8-flash",
         "gemini-3.5-flash-lite"
     )
 
     suspend fun create(brief: CharacterBrief): CharacterState {
-        val raw = generateWithFallback(buildPrompt(brief))
-        return parseCharacter(raw, brief)
+        val prompt = buildPrompt(brief)
+        val trace = LoreWiseTranscripts.trace("character_architect", prompt, brief.concept)
+        transcriptId = trace.id
+        val raw = observedCloudText(trace, prompt)
+        return try {
+            parseCharacter(raw, brief).also { character ->
+                trace.decision("proposal", "Character parsed; requires user confirmation")
+                LoreWiseTranscripts.stateChange(trace.id, org.json.JSONObject()
+                    .put("kind", "character_proposal").put("saved", false).put("character", character.toString()))
+            }
+        } catch (error: Exception) {
+            trace.decision("parse_error", error::class.java.simpleName)
+            trace.finish(raw, "parse_error")
+            throw error
+        }
     }
     private fun buildPrompt(brief: CharacterBrief): String = """
 You are LoreWise's character architect.
@@ -96,43 +111,6 @@ Rules:
 - notes should be one short sentence describing how the hero feels to play.
 """.trimIndent()
 
-    private suspend fun generateWithFallback(prompt: String): String {
-        var last: Exception? = null
-        for (modelName in modelNames) {
-            repeat(2) { attempt ->
-                val started = System.nanoTime()
-                val correlationId = LoreWiseDiagnostics.record(
-                    "ai", "character_architect", DiagnosticStatus.INFO,
-                    detail = "model=$modelName attempt=${attempt + 1}"
-                )
-                try {
-                    val model = Firebase
-                        .ai(backend = GenerativeBackend.googleAI())
-                        .generativeModel(modelName)
-                    val result = model.generateContent(prompt).text.orEmpty()
-                    LoreWiseDiagnostics.record(
-                        "ai", "character_architect", DiagnosticStatus.OK,
-                        durationMs = (System.nanoTime() - started) / 1_000_000,
-                        detail = "model=$modelName",
-                        correlationId = correlationId
-                    )
-                    return result
-                } catch (error: Exception) {
-                    last = error
-                    LoreWiseDiagnostics.record(
-                        "ai", "character_architect",
-                        if (attempt == 0) DiagnosticStatus.RETRY
-                        else DiagnosticStatus.ERROR,
-                        durationMs = (System.nanoTime() - started) / 1_000_000,
-                        detail = "model=$modelName ${error::class.java.simpleName}",
-                        correlationId = correlationId
-                    )
-                    if (attempt == 0) delay(700)
-                }
-            }
-        }
-        throw last ?: IllegalStateException("Character AI did not respond.")
-    }
     private fun parseCharacter(
         raw: String,
         brief: CharacterBrief

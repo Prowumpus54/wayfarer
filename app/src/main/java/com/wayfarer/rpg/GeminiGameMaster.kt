@@ -36,6 +36,7 @@ data class GmTurn(
     val xpAward: Int = 0,
     val raw: String = "",
     val modelName: String = "",
+    val transcriptId: String = "",
     val mechanicalExplanation: String = "",
     val clarification: String = "",
     val annotations: List<GmAnnotation> = emptyList()
@@ -75,15 +76,33 @@ class GeminiGameMaster(
         LoreWiseDiagnostics.record("ai", "gm_route", if (phase.contains("failed")) DiagnosticStatus.ERROR else if (phase.contains("retry") || phase == "fallback") DiagnosticStatus.RETRY else if (phase == "complete") DiagnosticStatus.OK else DiagnosticStatus.INFO,
             durationMs = duration, detail = "route=$route model=${model.take(80)} phase=$phase estimatedTokens=$contextTokens", correlationId = requestId)
     }
-    private val router = GmRouter(
-        onDevice = GmRuntime { prompt ->
-            onDevice.generate(GmSystemPrompt.text + "\n\n" + prompt)
-        },
-        desktop = GmRuntime { generateDesktop(it, "gm").first },
-        flash = GmRuntime { generateCloud(it, "gemini-3.8-flash") },
-        lite = GmRuntime { generateCloud(it, "gemini-3.5-flash-lite") },
-        desktopConfigured = { BuildConfig.LOCAL_LLM_URL.isNotBlank() }
-    )
+    private fun router(systemPrompt: String, trace: AiTranscriptTrace? = null): GmRouter {
+        fun observed(provider: String, model: String, profile: String, runtime: GmRuntime): GmRuntime =
+            GmRuntime { prompt ->
+                if (trace == null) runtime.generate(prompt)
+                else trace.attempt(provider, model, profile) { runtime.generate(prompt) }
+            }
+
+        return GmRouter(
+            onDevice = observed(
+                "on-device", "Gemma", "litertlm",
+                GmRuntime { prompt -> onDevice.generate(systemPrompt + "\n\n" + prompt) }
+            ),
+            desktop = observed(
+                "desktop", "Gemma", "gm",
+                GmRuntime { prompt -> generateDesktop(prompt, "gm", systemPrompt).first }
+            ),
+            flash = observed(
+                "firebase", "gemini-3.8-flash", "",
+                GmRuntime { prompt -> generateCloud(prompt, "gemini-3.8-flash", systemPrompt) }
+            ),
+            lite = observed(
+                "firebase", "gemini-3.5-flash-lite", "",
+                GmRuntime { prompt -> generateCloud(prompt, "gemini-3.5-flash-lite", systemPrompt) }
+            ),
+            desktopConfigured = { BuildConfig.LOCAL_LLM_URL.isNotBlank() }
+        )
+    }
 
     suspend fun adjudicate(
         context: GmContext,
@@ -179,8 +198,8 @@ blocks authoritative combat rolls that depend on those missing mechanics.
 XP: normally leave xpAward at 0. Encounter and challenge XP is owned by the game-state engine.
 """.trimIndent()
 
-        val generated = generateWithFallback(prompt)
-        return parseTurn(generated.first, generated.second)
+        val generated = generateObserved(prompt, context, "gm_adjudicate")
+        return parseObservedTurn(generated)
     }
 
     suspend fun resolve(
@@ -206,8 +225,8 @@ Return JSON only:
 {"narration":"outcome narration","mechanicalExplanation":"","clarification":"","annotations":[],"check":null,"modifiers":[],"effects":[],"xpAward":0}
 """.trimIndent()
 
-        val generated = generateWithFallback(prompt)
-        return parseTurn(generated.first, generated.second)
+        val generated = generateObserved(prompt, context, "gm_resolve")
+        return parseObservedTurn(generated)
     }
 
     suspend fun narrateMechanicalResult(
@@ -229,8 +248,8 @@ Return JSON only:
 {"narration":"brief consequence narration","mechanicalExplanation":"","clarification":"","annotations":[],"check":null,"modifiers":[],"effects":[],"xpAward":0}
 """.trimIndent()
 
-        val generated = generateWithFallback(prompt)
-        val parsed = parseTurn(generated.first, generated.second)
+        val generated = generateObserved(prompt, context, "gm_narrate")
+        val parsed = parseObservedTurn(generated)
         return parsed.copy(
             check = null,
             modifiers = emptyList(),
@@ -357,35 +376,118 @@ ${CharacterMechanicsContext.project(character)}
 """.trimIndent()
     }
 
-    private suspend fun generateWithFallback(contextPrompt: String): Pair<String, String> {
+    private data class Generated(
+        val text: String,
+        val model: String,
+        val trace: AiTranscriptTrace
+    )
+
+    private val metaSystemPrompt = """
+        You are LoreWise's Fourth Wall / Meta Chat assistant.
+        This channel is outside the fiction and is strictly read-only.
+        Explain only the working context supplied by LoreWise.
+        Distinguish authoritative facts, model inference, and missing information.
+        Never create player actions, request dice, emit game-state effects, alter inventory,
+        spend resources, move the party, award XP, or claim that campaign state changed.
+        Answer in clear prose rather than the GM JSON effect schema.
+        Hidden GM context may be discussed only because the user explicitly opened Meta Chat.
+    """.trimIndent()
+
+    suspend fun metaChat(
+        context: GmContext,
+        question: String,
+        metaHistory: List<String>
+    ): String {
+        val prompt = """
+FOURTH WALL / META CHAT
+READ-ONLY WORKING CONTEXT:
+${context.snapshot().render()}
+
+RECENT META CONVERSATION:
+${metaHistory.joinToString("\n").ifBlank { "No prior meta messages." }}
+
+USER QUESTION:
+$question
+""".trimIndent()
+        return generateObserved(
+            contextPrompt = prompt,
+            context = context,
+            operation = "meta_chat",
+            channel = "meta",
+            visible = question,
+            metaHistory = metaHistory,
+            systemPrompt = metaSystemPrompt,
+            applyTone = false
+        ).text
+    }
+
+    fun contextPrompt(context: GmContext): String = basePrompt(context)
+
+    private fun parseObservedTurn(generated: Generated): GmTurn {
+        val turn = parseTurn(generated.text, generated.model)
+            .copy(transcriptId = generated.trace.id)
+        generated.trace.proposed(turn)
+        return turn
+    }
+
+    private suspend fun generateObserved(
+        contextPrompt: String,
+        context: GmContext,
+        operation: String,
+        channel: String = "world",
+        visible: String = context.action,
+        metaHistory: List<String> = emptyList(),
+        systemPrompt: String = GmSystemPrompt.text,
+        applyTone: Boolean = true
+    ): Generated {
         requestId = java.util.UUID.randomUUID().toString()
-        val prompt = GmPromptEnvelope(toneProfile, contextPrompt, repetitionMemory.guidance()).user
-        contextTokens = GmContextEstimate.tokens(GmSystemPrompt.text, prompt)
+        val prompt = if (applyTone) {
+            GmPromptEnvelope(toneProfile, contextPrompt, repetitionMemory.guidance()).user
+        } else {
+            contextPrompt
+        }
+        contextTokens = GmContextEstimate.tokens(systemPrompt, prompt)
         LoreWiseDiagnostics.record(
             "ai", "gm_context",
             if (contextTokens >= 4096) DiagnosticStatus.WARN else DiagnosticStatus.INFO,
             detail = "estimatedTokens=" + contextTokens,
             correlationId = requestId
         )
+        val categories = context.snapshot().categories + if (channel == "meta") {
+            listOf(ContextCategory("meta_history", "Recent meta conversation", metaHistory.joinToString("\n")))
+        } else {
+            emptyList()
+        }
+        val trace = LoreWiseTranscripts.trace(
+            operation = operation,
+            prompt = systemPrompt + "\n\n" + prompt,
+            visible = visible,
+            snapshot = ModelContextSnapshot(categories),
+            channel = channel
+        )
+        requestId = trace.id
         status("GM", modelChoice.shortName, "routing")
         return try {
-            val answer = router.generate(modelChoice, prompt)
+            val answer = router(systemPrompt, trace).generate(modelChoice, prompt)
             status(answer.route.label, answer.modelName, "complete")
-            LoreWiseDiagnostics.record(
-                "ai", "gm_route", DiagnosticStatus.OK,
-                detail = "route=" + answer.route.name,
-                correlationId = requestId
-            )
-            answer.text to answer.modelName
+            trace.finish(answer.text, model = answer.modelName)
+            Generated(answer.text, answer.modelName, trace)
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            trace.finish("", "cancelled")
             throw cancelled
         } catch (error: Exception) {
+            trace.decision("error", error::class.java.simpleName)
+            trace.finish("", "error")
             status("GM", modelChoice.shortName, "failed")
             throw error
         }
     }
 
-    private suspend fun generateCloud(prompt: String, modelName: String): String {
+    private suspend fun generateCloud(
+        prompt: String,
+        modelName: String,
+        systemPrompt: String = GmSystemPrompt.text
+    ): String {
         var lastError: Exception? = null
         repeat(2) { attempt ->
             status("Cloud", modelName, if (attempt == 0) "requesting" else "retry ${attempt + 1}")
@@ -400,7 +502,7 @@ ${CharacterMechanicsContext.project(character)}
                     .ai(backend = GenerativeBackend.googleAI())
                     .generativeModel(
                         modelName,
-                        systemInstruction = content { text(GmSystemPrompt.text) }
+                        systemInstruction = content { text(systemPrompt) }
                     )
                 val text = model.generateContent(prompt).text.orEmpty()
                 check(text.isNotBlank()) { "Cloud GM returned an empty response" }
@@ -434,7 +536,8 @@ ${CharacterMechanicsContext.project(character)}
 
     private suspend fun generateDesktop(
         prompt: String,
-        profile: String
+        profile: String,
+        systemPrompt: String = GmSystemPrompt.text
     ): Pair<String, String> = withContext(Dispatchers.IO) {
         status("Desktop", profile, "requesting")
         val started = System.nanoTime()
@@ -463,7 +566,7 @@ ${CharacterMechanicsContext.project(character)}
             val body = JSONObject()
                 .put("profile", profile)
                 .put("prompt", prompt)
-                .put("systemPrompt", GmSystemPrompt.text)
+                .put("systemPrompt", systemPrompt)
                 .toString()
             connection.outputStream.use {
                 it.write(body.toByteArray(Charsets.UTF_8))

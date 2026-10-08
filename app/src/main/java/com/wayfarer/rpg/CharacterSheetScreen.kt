@@ -1092,6 +1092,9 @@ private fun FeatsInventorySheet(
             },
             onApply = { plan ->
                 onChange(character.copy(inventory = plan.items))
+                LoreWiseTranscripts.stateChange(plan.transcriptId, org.json.JSONObject()
+                    .put("kind", "inventory_confirmed").put("saved", true)
+                    .put("before", character.inventory.toString()).put("after", plan.items.toString()))
                 showInventoryAi = false
                 inventoryPlan = null
             },

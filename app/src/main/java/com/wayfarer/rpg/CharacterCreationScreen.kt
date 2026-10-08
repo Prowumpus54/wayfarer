@@ -175,7 +175,11 @@ fun CharacterCreationScreen(
         } else {
             HeroPreview(
                 character = preview!!,
-                onUse = { onCreated(preview!!) },
+                onUse = {
+                    onCreated(preview!!)
+                    LoreWiseTranscripts.stateChange(architect.transcriptId, org.json.JSONObject()
+                        .put("kind", "character_confirmed").put("saved", true).put("character", preview.toString()))
+                },
                 onRegenerate = {
                     preview = null
                     error = ""

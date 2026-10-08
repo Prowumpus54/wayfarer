@@ -17,6 +17,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         LoreWiseDiagnostics.initialize(applicationContext)
+        LoreWiseTranscripts.initialize(applicationContext)
         LoreWiseDiagnostics.record(
             "app",
             "startup",
@@ -70,6 +71,7 @@ fun LoreWiseApp() {
     var campaign by remember {
         mutableStateOf(campaignRegistry.activeCampaign(moduleId, manifest.title))
     }
+    LoreWiseTranscripts.activeScope = campaign.id
     var showCampaignHub by remember { mutableStateOf(false) }
     var current by remember(campaign.id) { mutableStateOf(AppScreen.Home) }
 
@@ -390,6 +392,23 @@ fun LoreWiseApp() {
                 character = characters[selectedMember],
                 onCharacterChange = ::updateSelected
             )
+
+            AppScreen.Meta -> MetaChatScreen(
+                modifier = contentModifier,
+                gmContext = captureGmContext(
+                    campaignTitle = campaign.name,
+                    locationId = currentLocationId,
+                    moduleScene = sceneContext,
+                    character = characters[selectedMember],
+                    party = party,
+                    recentEvents = events,
+                    runtimeState = runtimeState,
+                    archivedSummary = stateStore.loadHistorySummary()
+                ),
+                scope = playScope
+            )
+
+            AppScreen.Transcripts -> TranscriptViewerScreen(modifier = contentModifier)
 
             AppScreen.Diagnostics -> DiagnosticsScreen(
                 modifier = contentModifier

@@ -9,7 +9,8 @@ import org.json.JSONObject
 
 data class InventoryPlan(
     val summary: String,
-    val items: List<InventoryItem>
+    val items: List<InventoryItem>,
+    val transcriptId: String = ""
 )
 
 class InventoryAssistant {
@@ -23,8 +24,19 @@ class InventoryAssistant {
         goal: String
     ): InventoryPlan {
         val prompt = buildPrompt(character, goal)
-        val raw = generateWithFallback(prompt)
-        return parse(raw, character.inventory)
+        val trace = LoreWiseTranscripts.trace("inventory_assistant", prompt, goal)
+        val raw = observedCloudText(trace, prompt)
+        return try {
+            parse(raw, character.inventory).copy(transcriptId = trace.id).also { plan ->
+                trace.decision("proposal", "Replacement inventory parsed; requires user confirmation")
+                LoreWiseTranscripts.stateChange(trace.id, org.json.JSONObject()
+                    .put("kind", "inventory_proposal").put("saved", false).put("items", plan.items.toString()))
+            }
+        } catch (error: Exception) {
+            trace.decision("parse_error", error::class.java.simpleName)
+            trace.finish(raw, "parse_error")
+            throw error
+        }
     }
     private fun buildPrompt(
         character: CharacterState,
@@ -82,43 +94,6 @@ Rules:
 """.trimIndent()
     }
 
-    private suspend fun generateWithFallback(prompt: String): String {
-        var last: Exception? = null
-        for (modelName in modelNames) {
-            repeat(2) { attempt ->
-                val started = System.nanoTime()
-                val correlationId = LoreWiseDiagnostics.record(
-                    "ai", "inventory_assistant", DiagnosticStatus.INFO,
-                    detail = "model=$modelName attempt=${attempt + 1}"
-                )
-                try {
-                    val model = Firebase
-                        .ai(backend = GenerativeBackend.googleAI())
-                        .generativeModel(modelName)
-                    val result = model.generateContent(prompt).text.orEmpty()
-                    LoreWiseDiagnostics.record(
-                        "ai", "inventory_assistant", DiagnosticStatus.OK,
-                        durationMs = (System.nanoTime() - started) / 1_000_000,
-                        detail = "model=$modelName",
-                        correlationId = correlationId
-                    )
-                    return result
-                } catch (error: Exception) {
-                    last = error
-                    LoreWiseDiagnostics.record(
-                        "ai", "inventory_assistant",
-                        if (attempt == 0) DiagnosticStatus.RETRY
-                        else DiagnosticStatus.ERROR,
-                        durationMs = (System.nanoTime() - started) / 1_000_000,
-                        detail = "model=$modelName ${error::class.java.simpleName}",
-                        correlationId = correlationId
-                    )
-                    if (attempt == 0) delay(700)
-                }
-            }
-        }
-        throw last ?: IllegalStateException("Inventory AI did not respond.")
-    }
     private fun parse(
         raw: String,
         fallback: List<InventoryItem>

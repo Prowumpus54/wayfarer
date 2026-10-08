@@ -130,6 +130,26 @@ fun PlayScreen(
     }
     val jevClient = remember { JevCombatClient() }
 
+    fun applyObservedEffects(requestId: String, effects: List<GmEffect>) {
+        val application = onStateEffects(effects)
+        if (requestId.isNotBlank()) {
+            LoreWiseTranscripts.effects(requestId, effects, application)
+        }
+    }
+
+    fun recordXp(requestId: String, amount: Int) {
+        onXpAward(amount)
+        if (requestId.isNotBlank()) {
+            LoreWiseTranscripts.stateChange(
+                requestId,
+                org.json.JSONObject()
+                    .put("kind", "xp_award")
+                    .put("amount", amount)
+                    .put("saved", true)
+            )
+        }
+    }
+
     fun pushGmModifiers(incoming: List<GmDiceModifier>) {
         if (incoming.isEmpty()) return
         val labels = incoming.map { it.label.lowercase() }.toSet()
@@ -426,6 +446,16 @@ fun PlayScreen(
                 val turn = gameMaster.adjudicate(context, fastIntent)
                 gmNarration = turn.displayText()
                 pushGmModifiers(turn.modifiers)
+                if (turn.transcriptId.isNotBlank()) {
+                    LoreWiseTranscripts.stateChange(
+                        turn.transcriptId,
+                        org.json.JSONObject()
+                            .put("kind", "gm_ui")
+                            .put("narration", turn.narration)
+                            .put("pushedModifiers", turn.modifiers.toString())
+                            .put("requestedCheck", turn.check?.toString())
+                    )
+                }
 
                 val request = turn.check
                 if (request != null) {
@@ -436,7 +466,9 @@ fun PlayScreen(
                         pendingCheck = request
                         pendingContext = context
                         pendingActionEffects = listOfNotNull(deferredSpellEffect)
-                        if (turn.effects.isNotEmpty()) onStateEffects(turn.effects)
+                        if (turn.effects.isNotEmpty()) {
+                            applyObservedEffects(turn.transcriptId, turn.effects)
+                        }
                         check = null
                         checkName = request.name
                         gmStatus += " | Roll requested: " + request.name + " vs DC " + request.dc
@@ -444,10 +476,14 @@ fun PlayScreen(
                     }
                 } else {
                     val effects = turn.effects + if (turn.clarification.isBlank()) listOfNotNull(deferredSpellEffect) else emptyList()
-                    if (effects.isNotEmpty()) onStateEffects(effects)
+                    if (effects.isNotEmpty()) {
+                        applyObservedEffects(turn.transcriptId, effects)
+                    }
                     pendingActionEffects = emptyList()
                     // Provider callback retains route, latency, context and repetition status.
-                    if (turn.xpAward > 0) onXpAward(turn.xpAward)
+                    if (turn.xpAward > 0) {
+                        recordXp(turn.transcriptId, turn.xpAward)
+                    }
                 }
                 gmNarration?.let(onGmReply)
                 if (turn.clarification.isBlank() && pendingRoll == rollForAction) pendingRoll = null
@@ -505,10 +541,24 @@ fun PlayScreen(
                 val resolved = gameMaster.resolve(gmContext, request, result)
                 gmNarration = resolved.displayText()
                 pushGmModifiers(resolved.modifiers)
+                if (resolved.transcriptId.isNotBlank()) {
+                    LoreWiseTranscripts.stateChange(
+                        resolved.transcriptId,
+                        org.json.JSONObject()
+                            .put("kind", "resolved_check")
+                            .put("result", result.toString())
+                            .put("narration", resolved.narration)
+                            .put("pushedModifiers", resolved.modifiers.toString())
+                    )
+                }
                 val effects = resolved.effects + if (resolved.clarification.isBlank()) pendingActionEffects else emptyList()
-                if (effects.isNotEmpty()) onStateEffects(effects)
+                if (effects.isNotEmpty()) {
+                    applyObservedEffects(resolved.transcriptId, effects)
+                }
                 gmNarration?.let(onGmReply)
-                if (resolved.xpAward > 0) onXpAward(resolved.xpAward)
+                if (resolved.xpAward > 0) {
+                    recordXp(resolved.transcriptId, resolved.xpAward)
+                }
                 // Provider callback retains route, latency, context and repetition status.
                 if (resolved.clarification.isBlank()) {
                     pendingCheck = null

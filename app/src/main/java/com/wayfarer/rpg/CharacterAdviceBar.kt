@@ -108,40 +108,10 @@ Level-up mode: $levelUp; next level: ${snapshot.level + 1}; progression: $progre
 LOCAL REFERENCES: ${references.joinToString("\n") { it.name + ": " + it.description.take(1800) }}
 PLAYER QUESTION: $question
 """.trimIndent()
-                            var answer: String? = null
-                            for (model in listOf("gemini-3.8-flash", "gemini-3.5-flash-lite")) {
-                                val started = System.nanoTime()
-                                val correlationId = LoreWiseDiagnostics.record(
-                                    "ai", "character_advice", DiagnosticStatus.INFO,
-                                    detail = "model=$model"
-                                )
-                                try {
-                                    answer = Firebase.ai(backend = GenerativeBackend.googleAI())
-                                        .generativeModel(model).generateContent(instruction).text
-                                    LoreWiseDiagnostics.record(
-                                        "ai", "character_advice", DiagnosticStatus.OK,
-                                        durationMs = (System.nanoTime() - started) / 1_000_000,
-                                        detail = "model=$model",
-                                        correlationId = correlationId
-                                    )
-                                    if (!answer.isNullOrBlank()) break
-                                } catch (cancel: CancellationException) {
-                                    LoreWiseDiagnostics.record(
-                                        "ai", "character_advice", DiagnosticStatus.CANCELLED,
-                                        durationMs = (System.nanoTime() - started) / 1_000_000,
-                                        detail = "model=$model",
-                                        correlationId = correlationId
-                                    )
-                                    throw cancel
-                                } catch (error: Exception) {
-                                    LoreWiseDiagnostics.record(
-                                        "ai", "character_advice", DiagnosticStatus.RETRY,
-                                        durationMs = (System.nanoTime() - started) / 1_000_000,
-                                        detail = "model=$model ${error::class.java.simpleName}",
-                                        correlationId = correlationId
-                                    )
-                                }
-                            }
+                            val trace = LoreWiseTranscripts.trace("character_advice", instruction, question)
+                            val answer = try { observedCloudText(trace, instruction) }
+                                catch (cancel: CancellationException) { throw cancel }
+                                catch (_: Exception) { null }
                             response = answer?.takeIf { it.isNotBlank() }
                                 ?: "The assistant is unavailable. Your question is kept; try again. Your sheet has not changed."
                         } finally { busy = false }
