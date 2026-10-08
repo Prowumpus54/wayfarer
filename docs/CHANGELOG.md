@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased factory/ondevice-ai - 2026-10-07
+
+- Added Android on-device Gemma using Google LiteRT-LM 0.18.0 and private model import/status.
+- Renamed the HTTP/Tailscale route to Desktop Gemma; Auto now tries on-device, desktop, Flash, then Lite.
+- Explicit selections never change providers. Answering routes are recorded, and player-roll prompts are preserved across Auto attempts.
+- Added fake-runtime routing and model-store regression tests; no model weights or app-version change.
+- Aligned Kotlin Android/Compose compiler plugins to 2.4.0 for LiteRT-LM metadata compatibility.
+- See `ON_DEVICE_AI.md` for license/import and physical-device verification boundaries.
+
 ## 0.13.1 — 2026-10-07 — local GM transport fix
 
 ### Changed

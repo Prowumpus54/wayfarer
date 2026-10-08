@@ -79,10 +79,35 @@ fun PlayScreen(
     }
     var selectedModel by remember {
         val saved = gmPrefs.getString("model_choice", GmModelChoice.AUTO.name)
-        mutableStateOf(
-            runCatching { GmModelChoice.valueOf(saved ?: GmModelChoice.AUTO.name) }
-                .getOrDefault(GmModelChoice.AUTO)
-        )
+        mutableStateOf(GmModelChoice.fromSaved(saved))
+    }
+
+    val onDeviceGemma = remember { OnDeviceGemmaRuntime.get(context) }
+    val gemmaStatus by onDeviceGemma.status.collectAsState()
+    var modelImportBusy by remember { mutableStateOf(false) }
+    LaunchedEffect(onDeviceGemma, selectedModel) {
+        if (selectedModel != GmModelChoice.AUTO && selectedModel != GmModelChoice.ON_DEVICE) {
+            return@LaunchedEffect
+        }
+        try {
+            onDeviceGemma.prepare()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Runtime exposes the load failure through gemmaStatus.
+        }
+    }
+    val importGemma = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) scope.launch {
+            modelImportBusy = true
+            try {
+                onDeviceGemma.importModel(uri)
+            } finally {
+                modelImportBusy = false
+            }
+        }
     }
 
     var selectedTone by remember { mutableStateOf(runCatching {
@@ -93,8 +118,13 @@ fun PlayScreen(
     }.getOrDefault(GmResponseLength.MEDIUM)) }
     var scenePacing by remember { mutableStateOf(GmScenePacing.ROUTINE) }
     val repetitionMemory = remember(session) { GmRepetitionMemory() }
-    val gameMaster = remember(selectedModel, selectedTone, responseLength, scenePacing) {
-        GeminiGameMaster(selectedModel, GmToneProfile(selectedTone, responseLength, scenePacing), repetitionMemory) {
+    val gameMaster = remember(selectedModel, onDeviceGemma, selectedTone, responseLength, scenePacing) {
+        GeminiGameMaster(
+            selectedModel,
+            onDeviceGemma,
+            GmToneProfile(selectedTone, responseLength, scenePacing),
+            repetitionMemory
+        ) {
             gmStatus = it.format()
         }
     }
@@ -587,7 +617,8 @@ fun PlayScreen(
                         gmStatus.startsWith("GM error") -> Danger
                         gmStatus.contains("Cloud") ||
                             gmStatus.contains("Gemini") ||
-                            gmStatus.contains("Local") ||
+                            gmStatus.contains("On-device") ||
+                            gmStatus.contains("Desktop") ||
                             gmStatus.startsWith("Rules resolved") -> Green
                         else -> Muted
                     },
@@ -810,10 +841,37 @@ fun PlayScreen(
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
-                        "Auto uses local Gemma first when configured, then falls back to Gemini.",
+                        "Auto tries On-device Gemma, configured Desktop Gemma, Gemini Flash, then Lite. Explicit choices never switch providers.",
                         color = Muted,
                         fontSize = 12.sp
                     )
+                    Text(
+                        "On-device: ${gemmaStatus.state} — ${gemmaStatus.message}",
+                        color = Muted,
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        "Import compatible Gemma .litertlm weights obtained after accepting the model license. Weights stay in app-private storage.",
+                        color = Muted,
+                        fontSize = 12.sp
+                    )
+                    TextButton(
+                        enabled = !gmBusy && !modelImportBusy && gemmaStatus.state != GemmaModelState.LOADING,
+                        onClick = { importGemma.launch(arrayOf("*/*")) }
+                    ) { Text("Import on-device model", color = Green) }
+                    if (gemmaStatus.state == GemmaModelState.ERROR) {
+                        TextButton(enabled = !gmBusy && !modelImportBusy, onClick = {
+                            scope.launch {
+                                try {
+                                    onDeviceGemma.prepare()
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (_: Exception) {
+                                    // Status exposes the load failure.
+                                }
+                            }
+                        }) { Text("Retry loading model", color = Green) }
+                    }
                     Spacer(Modifier.height(6.dp))
                     Text("Narration style", color = Text)
                     GmTone.entries.forEach { tone ->
@@ -854,7 +912,7 @@ fun PlayScreen(
                                 Text(choice.displayName, color = Text)
                                 if (choice == GmModelChoice.AUTO) {
                                     Text(
-                                        "Local Gemma → Gemini 3.8 Flash → 3.5 Flash Lite",
+                                        "On-device Gemma → Desktop Gemma → Gemini 3.8 Flash → 3.5 Flash Lite",
                                         color = Muted,
                                         fontSize = 10.sp
                                     )

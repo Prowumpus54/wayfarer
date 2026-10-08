@@ -12,7 +12,7 @@ Top-level content must use system-bar-safe layout behavior. No title, menu contr
 
 ## Play
 
-Play shows campaign/location context, Game Master status, recent events, runtime encounter/challenge state, character actions, dice, and bounded side panels. Model status must distinguish Local, Gemini, rules-resolved, and error states rather than labeling every response Gemini.
+Play shows campaign/location context, Game Master status, recent events, runtime encounter/challenge state, character actions, dice, and bounded side panels. Model status distinguishes On-device Gemma, Desktop Gemma, Gemini Flash/Lite, rules-resolved, and error states. The model picker exposes private Gemma import and NOT_INSTALLED/INSTALLED/LOADING/READY/ERROR lifecycle status. Auto alone crosses providers; explicit selections fail clearly. See `ON_DEVICE_AI.md`.
 
 ## Diagnostics
 

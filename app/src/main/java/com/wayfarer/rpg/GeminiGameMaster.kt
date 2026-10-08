@@ -59,19 +59,9 @@ data class GmContext(
     val historySummary: String = ""
 )
 
-enum class GmModelChoice(
-    val displayName: String,
-    val shortName: String
-) {
-    AUTO("Auto (recommended)", "Auto"),
-    LOCAL("Local Gemma 4 E2B", "Local"),
-    LOCAL_FAST("Local Qwen 3.5 4B", "Local Fast"),
-    FLASH("Gemini 3.8 Flash", "3.8 Flash"),
-    FLASH_LITE("Gemini 3.5 Flash Lite", "3.5 Flash Lite")
-}
-
 class GeminiGameMaster(
     private val modelChoice: GmModelChoice = GmModelChoice.AUTO,
+    private val onDevice: GmRuntime = GmRuntime { error("On-device runtime not attached") },
     private val toneProfile: GmToneProfile = GmToneProfile(),
     private val repetitionMemory: GmRepetitionMemory = GmRepetitionMemory(),
     private val onStatus: (GmRoutingStatus) -> Unit = {}
@@ -85,16 +75,15 @@ class GeminiGameMaster(
         LoreWiseDiagnostics.record("ai", "gm_route", if (phase.contains("failed")) DiagnosticStatus.ERROR else if (phase.contains("retry") || phase == "fallback") DiagnosticStatus.RETRY else if (phase == "complete") DiagnosticStatus.OK else DiagnosticStatus.INFO,
             durationMs = duration, detail = "route=$route model=${model.take(80)} phase=$phase estimatedTokens=$contextTokens", correlationId = requestId)
     }
-    private val modelNames: List<String>
-        get() = when (modelChoice) {
-            GmModelChoice.AUTO -> listOf(
-                "gemini-3.8-flash",
-                "gemini-3.5-flash-lite"
-            )
-            GmModelChoice.LOCAL, GmModelChoice.LOCAL_FAST -> emptyList()
-            GmModelChoice.FLASH -> listOf("gemini-3.8-flash")
-            GmModelChoice.FLASH_LITE -> listOf("gemini-3.5-flash-lite")
-        }
+    private val router = GmRouter(
+        onDevice = GmRuntime { prompt ->
+            onDevice.generate(GmSystemPrompt.text + "\n\n" + prompt)
+        },
+        desktop = GmRuntime { generateDesktop(it, "gm").first },
+        flash = GmRuntime { generateCloud(it, "gemini-3.8-flash") },
+        lite = GmRuntime { generateCloud(it, "gemini-3.5-flash-lite") },
+        desktopConfigured = { BuildConfig.LOCAL_LLM_URL.isNotBlank() }
+    )
 
     suspend fun adjudicate(
         context: GmContext,
@@ -372,78 +361,94 @@ ${CharacterMechanicsContext.project(character)}
         requestId = java.util.UUID.randomUUID().toString()
         val prompt = GmPromptEnvelope(toneProfile, contextPrompt, repetitionMemory.guidance()).user
         contextTokens = GmContextEstimate.tokens(GmSystemPrompt.text, prompt)
-        LoreWiseDiagnostics.record("ai", "gm_context", if (contextTokens >= 4096) DiagnosticStatus.WARN else DiagnosticStatus.INFO,
-            detail = "estimatedTokens=$contextTokens", correlationId = requestId)
-        if (modelChoice == GmModelChoice.LOCAL) return generateLocal(prompt, "gm")
-        if (modelChoice == GmModelChoice.LOCAL_FAST) return generateLocal(prompt, "fast")
-        if (modelChoice == GmModelChoice.AUTO && BuildConfig.LOCAL_LLM_URL.isNotBlank()) {
-            try {
-                return generateLocal(prompt, "gm")
-            } catch (error: Exception) {
-                Log.w("LoreWiseGM", "Local GM unavailable; trying cloud fallback.")
-                LoreWiseDiagnostics.record("ai", "gm_fallback", DiagnosticStatus.RETRY, detail = "route=local_to_cloud")
-                status("Cloud", modelNames.first(), "fallback")
-            }
+        LoreWiseDiagnostics.record(
+            "ai", "gm_context",
+            if (contextTokens >= 4096) DiagnosticStatus.WARN else DiagnosticStatus.INFO,
+            detail = "estimatedTokens=" + contextTokens,
+            correlationId = requestId
+        )
+        status("GM", modelChoice.shortName, "routing")
+        return try {
+            val answer = router.generate(modelChoice, prompt)
+            status(answer.route.label, answer.modelName, "complete")
+            LoreWiseDiagnostics.record(
+                "ai", "gm_route", DiagnosticStatus.OK,
+                detail = "route=" + answer.route.name,
+                correlationId = requestId
+            )
+            answer.text to answer.modelName
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            status("GM", modelChoice.shortName, "failed")
+            throw error
         }
-        var lastError: Exception? = null
-
-        for (modelName in modelNames) {
-            repeat(2) { attempt ->
-                status("Cloud", modelName, if (attempt == 0) "requesting" else "retry ${attempt + 1}")
-                val started = System.nanoTime()
-                val correlationId = LoreWiseDiagnostics.record(
-                    "ai", "gm_cloud", DiagnosticStatus.INFO,
-                    detail = "model=$modelName attempt=${attempt + 1}"
-                )
-                try {
-                    val model = Firebase
-                        .ai(backend = GenerativeBackend.googleAI())
-                        .generativeModel(modelName, systemInstruction = content { text(GmSystemPrompt.text) })
-                    val text = model.generateContent(prompt).text.orEmpty()
-                    LoreWiseDiagnostics.record(
-                        "ai", "gm_cloud", DiagnosticStatus.OK,
-                        durationMs = elapsedMs(started),
-                        detail = "model=$modelName",
-                        correlationId = correlationId
-                    )
-                    status("Cloud", modelName, "complete", elapsedMs(started))
-                    return text to modelName
-                } catch (error: Exception) {
-                    lastError = error
-                    val retryable = isTransient(error)
-                    LoreWiseDiagnostics.record(
-                        "ai", "gm_cloud",
-                        if (retryable) DiagnosticStatus.RETRY else DiagnosticStatus.ERROR,
-                        durationMs = elapsedMs(started),
-                        detail = "model=$modelName ${error::class.java.simpleName}",
-                        correlationId = correlationId
-                    )
-                    status("Cloud", modelName, if (retryable) "retry pending" else "failed", elapsedMs(started))
-                    if (!retryable) throw error
-                    if (attempt == 0) delay(900)
-                }
-            }
-        }
-        throw lastError ?: IllegalStateException("No cloud GM model responded.")
     }
 
-    private suspend fun generateLocal(
+    private suspend fun generateCloud(prompt: String, modelName: String): String {
+        var lastError: Exception? = null
+        repeat(2) { attempt ->
+            status("Cloud", modelName, if (attempt == 0) "requesting" else "retry ${attempt + 1}")
+            val started = System.nanoTime()
+            val correlationId = LoreWiseDiagnostics.record(
+                "ai", "gm_cloud", DiagnosticStatus.INFO,
+                detail = "model=$modelName attempt=${attempt + 1}",
+                correlationId = requestId
+            )
+            try {
+                val model = Firebase
+                    .ai(backend = GenerativeBackend.googleAI())
+                    .generativeModel(
+                        modelName,
+                        systemInstruction = content { text(GmSystemPrompt.text) }
+                    )
+                val text = model.generateContent(prompt).text.orEmpty()
+                check(text.isNotBlank()) { "Cloud GM returned an empty response" }
+                LoreWiseDiagnostics.record(
+                    "ai", "gm_cloud", DiagnosticStatus.OK,
+                    durationMs = elapsedMs(started),
+                    detail = "model=$modelName",
+                    correlationId = correlationId
+                )
+                status("Cloud", modelName, "complete", elapsedMs(started))
+                return text
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                lastError = error
+                val retryable = isTransient(error)
+                LoreWiseDiagnostics.record(
+                    "ai", "gm_cloud",
+                    if (retryable) DiagnosticStatus.RETRY else DiagnosticStatus.ERROR,
+                    durationMs = elapsedMs(started),
+                    detail = "model=$modelName ${error::class.java.simpleName}",
+                    correlationId = correlationId
+                )
+                status("Cloud", modelName, if (retryable) "retry pending" else "failed", elapsedMs(started))
+                if (!retryable) throw error
+                if (attempt == 0) delay(900)
+            }
+        }
+        throw lastError ?: IllegalStateException("Cloud GM unavailable")
+    }
+
+    private suspend fun generateDesktop(
         prompt: String,
         profile: String
     ): Pair<String, String> = withContext(Dispatchers.IO) {
-        status("Local", profile, "requesting")
+        status("Desktop", profile, "requesting")
         val started = System.nanoTime()
         val correlationId = LoreWiseDiagnostics.record(
-            "ai", "gm_local", DiagnosticStatus.INFO,
+            "ai", "gm_desktop", DiagnosticStatus.INFO,
             detail = "profile=$profile"
         )
         val base = BuildConfig.LOCAL_LLM_URL.trimEnd('/')
         if (base.isBlank()) {
-            val error = IOException("Local LLM URL is not configured")
+            val error = IOException("Desktop Gemma URL is not configured")
             LoreWiseDiagnostics.error(
-                "ai", "gm_local", error, elapsedMs(started), correlationId
+                "ai", "gm_desktop", error, elapsedMs(started), correlationId
             )
-            status("Local", profile, "failed", elapsedMs(started))
+            status("Desktop", profile, "failed", elapsedMs(started))
             throw error
         }
         val connection = (URL("$base/v1/chat").openConnection() as HttpURLConnection).apply {
@@ -471,26 +476,26 @@ ${CharacterMechanicsContext.project(character)}
             }
             val raw = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
             if (code !in 200..299) {
-                throw IOException("Local LLM HTTP $code")
+                throw IOException("Desktop Gemma HTTP $code")
             }
             val json = JSONObject(raw)
             val text = json.optString("text")
             if (text.isBlank()) {
-                throw IOException("Local LLM returned an empty response")
+                throw IOException("Desktop Gemma returned an empty response")
             }
             val model = json.optString("model", profile)
             LoreWiseDiagnostics.record(
-                "ai", "gm_local", DiagnosticStatus.OK,
+                "ai", "gm_desktop", DiagnosticStatus.OK,
                 durationMs = elapsedMs(started),
                 detail = "profile=$profile model=$model",
                 correlationId = correlationId
             )
-            status("Local", model, "complete", elapsedMs(started))
-            text to ("local:" + model)
+            status("Desktop", model, "complete", elapsedMs(started))
+            text to ("desktop:" + model)
         } catch (error: Exception) {
-            status("Local", profile, "failed", elapsedMs(started))
+            status("Desktop", profile, "failed", elapsedMs(started))
             LoreWiseDiagnostics.error(
-                "ai", "gm_local", error, elapsedMs(started), correlationId
+                "ai", "gm_desktop", error, elapsedMs(started), correlationId
             )
             throw error
         } finally {
@@ -589,7 +594,7 @@ ${CharacterMechanicsContext.project(character)}
                                 mechanics = item.optString("mechanics"),
                                 category = item.optString("category", "Other"),
                                 weight = item.optDouble("weight", 0.0).coerceAtLeast(0.0),
-                                icon = item.optString("icon", "🎒"),
+                                icon = item.optString("icon", "ðŸŽ’"),
                                 flag = item.optString("flag"),
                                 dc = item.optInt("dc", 0).coerceIn(0, 99),
                                 goal = item.optInt("goal", 1).coerceIn(1, 100)

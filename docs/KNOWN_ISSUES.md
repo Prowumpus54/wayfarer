@@ -4,7 +4,7 @@
 Status: open. Release code uses Play Integrity, but production Firebase/Play Console configuration and a signed release-device verification are still required.
 
 ## LW-002 — Local GM transport in release builds
-Status: open by design. Debug builds allow cleartext LAN traffic for the local gateway. Release builds disable cleartext, so a production local-GM path requires HTTPS or another secure transport.
+Status: open by design. Debug builds allow cleartext LAN traffic for the local gateway. Release builds disable cleartext, so a production Desktop Gemma path requires HTTPS or another secure transport. On-device Gemma uses imported private weights and no HTTP transport; see `ON_DEVICE_AI.md`.
 
 ## LW-003 — Legacy PF2 reference database
 Status: contained. The bundled rules SQLite is PF2 legacy reference content. PF1 code explicitly avoids using it as PF1 evidence, but the asset remains for legacy/reference behavior.

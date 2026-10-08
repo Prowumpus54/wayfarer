@@ -9,7 +9,7 @@ LoreWise is a Pathfinder 1e-first Android tabletop RPG companion. It combines de
 - Preserve a player's recorded roll across retry/fallback paths.
 - PF1 is the primary ruleset. The bundled PF2 database is legacy reference content and is never PF1 evidence.
 - Preserve `com.wayfarer.rpg` and existing `wayfarer_*` storage names until a tested migration exists.
-- Local Gemma is preferred in Auto mode when configured; Gemini is the cloud fallback.
+- Auto tries on-device Gemma, configured Desktop Gemma, Gemini Flash, then Lite. Explicit choices never switch providers. On-device uses Google LiteRT-LM and user-imported weights; see `ON_DEVICE_AI.md`.
 - Never log prompts, auth tokens, invite codes, personal data, or hidden module content in diagnostics.
 - Diagnostics are bounded, sanitized, asynchronous, and must never block play.
 - Debug may use LAN cleartext for local development; release builds must not.

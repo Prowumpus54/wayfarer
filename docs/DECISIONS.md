@@ -10,7 +10,7 @@ Character defaults, bundled Sunless Citadel runtime behavior, PF1 creature profi
 AI is not trusted to roll dice or commit authoritative combat/resource values. Structured effects are validated/applied by the app.
 
 ## Local-first GM routing
-Auto mode prefers the configured local Gemma GM, then falls back to Gemini cloud models. The fast legacy local profile remains available separately.
+Auto tries on-device Gemma, configured Desktop Gemma, Gemini Flash, then Lite. Explicit choices never switch providers. Android uses Google's current LiteRT-LM Kotlin API (0.18.0), with Kotlin/Compose compiler 2.4.0 for its metadata compatibility. Models are user-imported into app-private storage after external license acceptance; no model is bundled or automatically downloaded. The legacy Qwen picker entry is removed; saved HTTP choices map to Desktop Gemma. See `ON_DEVICE_AI.md`.
 
 ## Release security differs from debug convenience
 Debug may use cleartext LAN access and App Check debug provider. Release disables cleartext and uses Play Integrity.

@@ -15,6 +15,8 @@ Read in this order for engineering work:
 11. `RELEASE_CHECKLIST.md` — distributable-build gate.
 12. `DECISIONS.md`, `CHANGELOG.md`, and `ROADMAP.md` — rationale and forward work.
 
+For Android/desktop/cloud GM routing and private model import, see `ON_DEVICE_AI.md`.
+
 Older PF2-era notes are historical only and must not override current-state documents.
 
 GM conversation behavior: [GM_CONVERSATION.md](GM_CONVERSATION.md).

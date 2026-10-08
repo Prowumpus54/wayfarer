@@ -102,3 +102,6 @@ Thumbs.db
 *.token
 
 /local-llm/transcripts/
+
+# On-device weights are user imports, never APK/Git assets.
+*.litertlm

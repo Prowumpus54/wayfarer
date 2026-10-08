@@ -9,7 +9,7 @@ LoreWise is a single Android application with local persistence, bundled rules/m
 - `CombatRulesEngine.kt` resolves initiative, PF1 attacks, criticals, maneuvers, damage, and turn advancement.
 - `Pf1Rules.kt` owns PF1 character math, XP, skills, saves, BAB, spell progression, and migration helpers.
 - `Pf1CreatureCatalog.kt` supplies authoritative PF1 creature combat profiles for supported encounters.
-- `GeminiGameMaster.kt` handles narration/adjudication. Local Gemma is preferred when configured; Gemini is fallback.
+- `GeminiGameMaster.kt` handles narration/adjudication. `GmRouter.kt` enforces explicit choices and Auto order: on-device Gemma, configured Desktop Gemma, Gemini Flash, then Lite. `OnDeviceGemmaRuntime.kt` uses Google LiteRT-LM; `GemmaModelStore.kt` owns app-private imported weights. See `ON_DEVICE_AI.md`.
 - `JevCombatClient.kt` classifies bounded combat intent; Android still owns the final mechanics.
 - `Diagnostics.kt` records bounded sanitized operational evidence. `DiagnosticsScreen.kt` exposes it in-app.
 

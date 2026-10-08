@@ -20,4 +20,4 @@ Product/UI naming is LoreWise. Legacy `wayfarer_*` preference/database names, th
 
 ## Runtime model
 
-Android owns dice, combat math, state transitions, HP, XP, initiative, spell resources, loot, and persistence. Local Gemma is the preferred GM when configured; Gemini is the cloud fallback. AI narration may request bounded effects but cannot override authoritative mechanics.
+Android owns dice, combat math, state transitions, HP, XP, initiative, spell resources, loot, and persistence. Auto tries on-device Gemma (Google LiteRT-LM), configured Desktop Gemma, Gemini Flash, then Gemini Lite. Explicit model choices never switch providers. See [on-device AI](docs/ON_DEVICE_AI.md) for model import and verification boundaries. AI narration may request bounded effects but cannot override authoritative mechanics.

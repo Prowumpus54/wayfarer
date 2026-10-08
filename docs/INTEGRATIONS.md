@@ -6,11 +6,11 @@ Firebase Auth supplies signed-in identity. Firestore stores campaign membership/
 
 App Check uses the debug provider only in debug builds. Release builds use Play Integrity.
 
-## Local LLM gateway
+## Desktop Gemma gateway
 
 `local-llm/gateway.py` exposes an authenticated local HTTP gateway to Ollama. The primary GM profile is `gemma4:e2b-it-qat`. LoreWise environment variables are preferred while legacy WAYFARER variables remain accepted for transition compatibility.
 
-Auto mode uses local Gemma first when `LOCAL_LLM_URL` is configured, then cloud Gemini fallback. Release builds do not permit cleartext HTTP, so production local inference requires a secure transport.
+Auto uses on-device Gemma first (LiteRT-LM 0.18.0), then this desktop route when `LOCAL_LLM_URL` is configured/reachable, then Gemini Flash and Lite. Explicit choices never switch routes. User-imported app-private `.litertlm` weights power Android inference; see `ON_DEVICE_AI.md` for installation, licensing, status and test boundaries. Release builds do not permit cleartext HTTP, so production desktop inference requires a secure transport. On-device inference does not use HTTP.
 
 ## Jev combat classifier
 
