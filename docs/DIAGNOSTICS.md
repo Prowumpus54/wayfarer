@@ -43,3 +43,7 @@ Status: **partially implemented**. Local Gemma traffic is now mirrored by `local
 ## Support workflow
 
 Open Diagnostics from the main navigation, inspect error/slow counts, refresh history, copy a sanitized report, or clear local diagnostic history. Copying does not clear the source events.
+
+## Conversation quality slice
+
+See [GM conversation controls](GM_CONVERSATION.md) for system/tone separation, clarification and structured OOC rendering, bounded lexical repetition memory, and live route/context/latency/retry instrumentation.

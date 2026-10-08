@@ -4,6 +4,7 @@ import android.util.Log
 import com.google.firebase.Firebase
 import com.google.firebase.ai.ai
 import com.google.firebase.ai.type.GenerativeBackend
+import com.google.firebase.ai.type.content
 import kotlinx.coroutines.delay
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -34,7 +35,10 @@ data class GmTurn(
     val effects: List<GmEffect> = emptyList(),
     val xpAward: Int = 0,
     val raw: String = "",
-    val modelName: String = ""
+    val modelName: String = "",
+    val mechanicalExplanation: String = "",
+    val clarification: String = "",
+    val annotations: List<GmAnnotation> = emptyList()
 )
 
 data class GmContext(
@@ -67,8 +71,20 @@ enum class GmModelChoice(
 }
 
 class GeminiGameMaster(
-    private val modelChoice: GmModelChoice = GmModelChoice.AUTO
+    private val modelChoice: GmModelChoice = GmModelChoice.AUTO,
+    private val toneProfile: GmToneProfile = GmToneProfile(),
+    private val repetitionMemory: GmRepetitionMemory = GmRepetitionMemory(),
+    private val onStatus: (GmRoutingStatus) -> Unit = {}
 ) {
+    private var requestId = ""
+    private var contextTokens = 0
+    private var lastStatus = GmRoutingStatus("GM", "pending", "ready")
+    private fun status(route: String, model: String, phase: String, duration: Long? = null) {
+        lastStatus = GmRoutingStatus(route, model.take(80), phase, duration, contextTokens)
+        onStatus(lastStatus)
+        LoreWiseDiagnostics.record("ai", "gm_route", if (phase.contains("failed")) DiagnosticStatus.ERROR else if (phase.contains("retry") || phase == "fallback") DiagnosticStatus.RETRY else if (phase == "complete") DiagnosticStatus.OK else DiagnosticStatus.INFO,
+            durationMs = duration, detail = "route=$route model=${model.take(80)} phase=$phase estimatedTokens=$contextTokens", correlationId = requestId)
+    }
     private val modelNames: List<String>
         get() = when (modelChoice) {
             GmModelChoice.AUTO -> listOf(
@@ -106,6 +122,9 @@ ${context.playerRoll?.let { "PLAYER'S ALREADY ROLLED DICE: $it. Use this result 
 Return one JSON object only:
 {
   "narration": "What happens immediately before any required roll.",
+  "mechanicalExplanation": "",
+  "clarification": "",
+  "annotations": [],
   "check": null,
   "modifiers": [],
   "effects": [],
@@ -192,12 +211,10 @@ Degree: ${degreeLabel(result.degree)}
 Narrate the consequences. Do not reroll, change the DC,
 or contradict the degree of success.
 
-If this resolved outcome completes a meaningful challenge, encounter,
-discovery, objective, or important social obstacle, you may award 10-120 XP.
-Otherwise xpAward must be 0. Never award XP merely for making the roll.
+XP is owned by the game-state engine. Leave xpAward at 0.
 
 Return JSON only:
-{"narration":"outcome narration","check":null,"modifiers":[],"effects":[],"xpAward":0}
+{"narration":"outcome narration","mechanicalExplanation":"","clarification":"","annotations":[],"check":null,"modifiers":[],"effects":[],"xpAward":0}
 """.trimIndent()
 
         val generated = generateWithFallback(prompt)
@@ -220,7 +237,7 @@ target, degree of success, initiative, conditions, loot, XP, or resources.
 Do not emit additional state effects.
 
 Return JSON only:
-{"narration":"brief consequence narration","check":null,"modifiers":[],"effects":[],"xpAward":0}
+{"narration":"brief consequence narration","mechanicalExplanation":"","clarification":"","annotations":[],"check":null,"modifiers":[],"effects":[],"xpAward":0}
 """.trimIndent()
 
         val generated = generateWithFallback(prompt)
@@ -241,7 +258,7 @@ Return JSON only:
         val route = JevCombatPolicy.route(intent)
         return """
 You are LoreWise's immediate combat game master.
-Be concise and resolve only the declared action.
+Resolve only the declared action.
 
 Android is authoritative for all dice and rules calculations.
 Jev already classified the intent:
@@ -292,7 +309,7 @@ Request only one check when one is actually needed.
 
         return """
 You are LoreWise's immediate tabletop game master.
-Be concise, atmospheric, fair, and responsive to player intent.
+Be fair and responsive to player intent.
 
 CRITICAL RULE:
 You never roll dice. You may REQUEST a check. Android is the
@@ -351,7 +368,12 @@ ${CharacterMechanicsContext.project(character)}
 """.trimIndent()
     }
 
-    private suspend fun generateWithFallback(prompt: String): Pair<String, String> {
+    private suspend fun generateWithFallback(contextPrompt: String): Pair<String, String> {
+        requestId = java.util.UUID.randomUUID().toString()
+        val prompt = GmPromptEnvelope(toneProfile, contextPrompt, repetitionMemory.guidance()).user
+        contextTokens = GmContextEstimate.tokens(GmSystemPrompt.text, prompt)
+        LoreWiseDiagnostics.record("ai", "gm_context", if (contextTokens >= 4096) DiagnosticStatus.WARN else DiagnosticStatus.INFO,
+            detail = "estimatedTokens=$contextTokens", correlationId = requestId)
         if (modelChoice == GmModelChoice.LOCAL) return generateLocal(prompt, "gm")
         if (modelChoice == GmModelChoice.LOCAL_FAST) return generateLocal(prompt, "fast")
         if (modelChoice == GmModelChoice.AUTO && BuildConfig.LOCAL_LLM_URL.isNotBlank()) {
@@ -359,12 +381,15 @@ ${CharacterMechanicsContext.project(character)}
                 return generateLocal(prompt, "gm")
             } catch (error: Exception) {
                 Log.w("LoreWiseGM", "Local GM unavailable; trying cloud fallback.")
+                LoreWiseDiagnostics.record("ai", "gm_fallback", DiagnosticStatus.RETRY, detail = "route=local_to_cloud")
+                status("Cloud", modelNames.first(), "fallback")
             }
         }
         var lastError: Exception? = null
 
         for (modelName in modelNames) {
             repeat(2) { attempt ->
+                status("Cloud", modelName, if (attempt == 0) "requesting" else "retry ${attempt + 1}")
                 val started = System.nanoTime()
                 val correlationId = LoreWiseDiagnostics.record(
                     "ai", "gm_cloud", DiagnosticStatus.INFO,
@@ -373,7 +398,7 @@ ${CharacterMechanicsContext.project(character)}
                 try {
                     val model = Firebase
                         .ai(backend = GenerativeBackend.googleAI())
-                        .generativeModel(modelName)
+                        .generativeModel(modelName, systemInstruction = content { text(GmSystemPrompt.text) })
                     val text = model.generateContent(prompt).text.orEmpty()
                     LoreWiseDiagnostics.record(
                         "ai", "gm_cloud", DiagnosticStatus.OK,
@@ -381,6 +406,7 @@ ${CharacterMechanicsContext.project(character)}
                         detail = "model=$modelName",
                         correlationId = correlationId
                     )
+                    status("Cloud", modelName, "complete", elapsedMs(started))
                     return text to modelName
                 } catch (error: Exception) {
                     lastError = error
@@ -392,6 +418,7 @@ ${CharacterMechanicsContext.project(character)}
                         detail = "model=$modelName ${error::class.java.simpleName}",
                         correlationId = correlationId
                     )
+                    status("Cloud", modelName, if (retryable) "retry pending" else "failed", elapsedMs(started))
                     if (!retryable) throw error
                     if (attempt == 0) delay(900)
                 }
@@ -404,6 +431,7 @@ ${CharacterMechanicsContext.project(character)}
         prompt: String,
         profile: String
     ): Pair<String, String> = withContext(Dispatchers.IO) {
+        status("Local", profile, "requesting")
         val started = System.nanoTime()
         val correlationId = LoreWiseDiagnostics.record(
             "ai", "gm_local", DiagnosticStatus.INFO,
@@ -415,6 +443,7 @@ ${CharacterMechanicsContext.project(character)}
             LoreWiseDiagnostics.error(
                 "ai", "gm_local", error, elapsedMs(started), correlationId
             )
+            status("Local", profile, "failed", elapsedMs(started))
             throw error
         }
         val connection = (URL("$base/v1/chat").openConnection() as HttpURLConnection).apply {
@@ -429,6 +458,7 @@ ${CharacterMechanicsContext.project(character)}
             val body = JSONObject()
                 .put("profile", profile)
                 .put("prompt", prompt)
+                .put("systemPrompt", GmSystemPrompt.text)
                 .toString()
             connection.outputStream.use {
                 it.write(body.toByteArray(Charsets.UTF_8))
@@ -455,8 +485,10 @@ ${CharacterMechanicsContext.project(character)}
                 detail = "profile=$profile model=$model",
                 correlationId = correlationId
             )
+            status("Local", model, "complete", elapsedMs(started))
             text to ("local:" + model)
         } catch (error: Exception) {
+            status("Local", profile, "failed", elapsedMs(started))
             LoreWiseDiagnostics.error(
                 "ai", "gm_local", error, elapsedMs(started), correlationId
             )
@@ -489,14 +521,14 @@ ${CharacterMechanicsContext.project(character)}
             .removePrefix("json:")
             .trim()
 
-        return runCatching {
+        val parsed = runCatching {
             val start = clean.indexOf('{')
             val end = clean.lastIndexOf('}')
             val jsonText = if (start >= 0 && end > start) {
                 clean.substring(start, end + 1)
             } else clean
             val json = JSONObject(jsonText)
-            val narration = json.optString("narration").ifBlank { clean }
+            val narration = json.optString("narration")
             val checkObject = json.optJSONObject("check")
             val check = if (checkObject == null) {
                 null
@@ -574,17 +606,32 @@ ${CharacterMechanicsContext.project(character)}
                 effects = effects,
                 xpAward = json.optInt("xpAward", 0).coerceIn(0, 250),
                 raw = raw,
-                modelName = modelName
+                modelName = modelName,
+                mechanicalExplanation = json.optString("mechanicalExplanation"),
+                clarification = json.optString("clarification"),
+                annotations = buildList {
+                    val rows = json.optJSONArray("annotations")
+                    for (i in 0 until minOf(rows?.length() ?: 0, 8)) {
+                        val row = rows?.optJSONObject(i) ?: continue
+                        val kind = row.optString("kind")
+                        if (kind in listOf("Rules", "GM")) add(GmAnnotation(kind, row.optString("text")))
+                    }
+                }
             )
         }.getOrElse {
             GmTurn(
-                narration = clean.ifBlank {
-                    "The Game Master did not return a response."
-                },
+                narration = "",
+                clarification = "The GM response could not be read. Please retry this action; your recorded roll is retained.",
                 raw = raw,
                 modelName = modelName
             )
         }
+
+        val repetition = repetitionMemory.observe(parsed.narration)
+        LoreWiseDiagnostics.record("ai", "gm_repetition", DiagnosticStatus.INFO,
+            detail = "score=${String.format(java.util.Locale.ROOT, "%.2f", repetition.score)} phrases=${repetition.repeatedPhrases.size}", correlationId = requestId)
+        onStatus(lastStatus.copy(repetitionScore = repetition.score))
+        return parsed.withClarificationGuard()
     }
 
     private fun degreeLabel(degree: Degree): String = when (degree) {

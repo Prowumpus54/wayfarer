@@ -1,0 +1,13 @@
+# GM conversation controls
+
+The hard `GmSystemPrompt` owns PF1 authority, preservation of recorded rolls, no invented mechanics/state, hidden information, validated structured effects, clarification, and the output contract. `GmPromptEnvelope` keeps it separate from scene data and the typed tone profile. Firebase uses systemInstruction; the existing local gateway now accepts optional systemPrompt and forwards a system role. Deploying that gateway update is an integration prerequisite; this branch does not deploy it. Older callers without systemPrompt remain supported.
+
+The GM model picker also controls concise, cinematic, detailed, horror, or classic tabletop voice and short/medium/long response length. Tone and length persist in wayfarer_gm preferences. Routine pacing targets at most 60 narration words; important pacing permits the selected length (60/130/240). Pacing is a session control, not inferred scene authority. These are prompt targets, not hard truncation limits.
+
+Turns keep narration separate from mechanicalExplanation, clarification and optional Rules/GM annotations. Rendering adds explicit [Rules]/[GM] labels. A clarification suppresses returned checks, modifiers, effects and XP; the pending player roll and deferred spell cost are retained. AI State changed annotations are discarded because an AI response cannot attest that Android committed a change. Existing engine application summaries remain authoritative.
+
+GmRepetitionMemory retains six bounded responses transiently per play session. Unicode word-set Jaccard overlap (maximum against recent responses) scores lexical similarity; matching three-word phrases detect repeated imagery wording. Prompt guidance includes bounded recent narration and allows repetition when a scene materially changes. This detects lexical repetition, not semantic paraphrases. It does not persist hidden narration in diagnostics.
+
+Live status shows route/model, phase, model-call latency, approximate context tokens and repetition score. Context estimate is characters/4, not provider tokenization; warnings begin at 4096 tokens to flag the local gateway context budget. Bounded diagnostics add numeric context/repetition data and correlated gm_route request/retry/fallback/completion events. No prompt, repeated phrase, action, or response text is stored there. The existing protected desktop transcript separately records system and user prompt roles.
+
+Tests establish deterministic profile, transport separation, scoring and formatting behavior. They cannot establish that a model obeys instructions; engine validation remains mandatory. Device UI, live provider obedience, and gateway/cloud transport require separate integration checks.

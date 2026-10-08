@@ -85,7 +85,19 @@ fun PlayScreen(
         )
     }
 
-    val gameMaster = remember(selectedModel) { GeminiGameMaster(selectedModel) }
+    var selectedTone by remember { mutableStateOf(runCatching {
+        GmTone.valueOf(gmPrefs.getString("tone", GmTone.CONCISE.name)!!)
+    }.getOrDefault(GmTone.CONCISE)) }
+    var responseLength by remember { mutableStateOf(runCatching {
+        GmResponseLength.valueOf(gmPrefs.getString("response_length", GmResponseLength.MEDIUM.name)!!)
+    }.getOrDefault(GmResponseLength.MEDIUM)) }
+    var scenePacing by remember { mutableStateOf(GmScenePacing.ROUTINE) }
+    val repetitionMemory = remember(session) { GmRepetitionMemory() }
+    val gameMaster = remember(selectedModel, selectedTone, responseLength, scenePacing) {
+        GeminiGameMaster(selectedModel, GmToneProfile(selectedTone, responseLength, scenePacing), repetitionMemory) {
+            gmStatus = it.format()
+        }
+    }
     val jevClient = remember { JevCombatClient() }
 
     fun pushGmModifiers(incoming: List<GmDiceModifier>) {
@@ -352,12 +364,11 @@ fun PlayScreen(
                                 narrationContext,
                                 mechanicalSummary
                             )
-                            gmNarration = narrated.narration
+                            gmNarration = narrated.displayText()
                             gmNarration?.let(onGmReply)
-                            gmStatus = "Rules resolved • " +
-                                narrated.modelName.removePrefix("gemini-")
+                            // Retain provider routing and measured latency.
                             pendingActionEffects = emptyList()
-                            if (pendingRoll == rollForAction) pendingRoll = null
+                            if (narrated.clarification.isBlank() && pendingRoll == rollForAction) pendingRoll = null
                             return@launch
                         }
 
@@ -383,7 +394,7 @@ fun PlayScreen(
                 }
 
                 val turn = gameMaster.adjudicate(context, fastIntent)
-                gmNarration = turn.narration
+                gmNarration = turn.displayText()
                 pushGmModifiers(turn.modifiers)
 
                 val request = turn.check
@@ -398,18 +409,18 @@ fun PlayScreen(
                         if (turn.effects.isNotEmpty()) onStateEffects(turn.effects)
                         check = null
                         checkName = request.name
-                        gmStatus = "Roll requested • " + request.name + " vs DC " + request.dc
+                        gmStatus += " | Roll requested: " + request.name + " vs DC " + request.dc
                         openPanel = "dice"
                     }
                 } else {
-                    val effects = turn.effects + listOfNotNull(deferredSpellEffect)
+                    val effects = turn.effects + if (turn.clarification.isBlank()) listOfNotNull(deferredSpellEffect) else emptyList()
                     if (effects.isNotEmpty()) onStateEffects(effects)
                     pendingActionEffects = emptyList()
-                    gmStatus = gmModelStatus(turn.modelName)
+                    // Provider callback retains route, latency, context and repetition status.
                     if (turn.xpAward > 0) onXpAward(turn.xpAward)
                 }
                 gmNarration?.let(onGmReply)
-                if (pendingRoll == rollForAction) pendingRoll = null
+                if (turn.clarification.isBlank() && pendingRoll == rollForAction) pendingRoll = null
             } catch (cancel: CancellationException) { throw cancel
             } catch (error: Exception) {
                 Log.e("LoreWiseGM", "adjudicate failed type=${error::class.java.name} message=${error.message}", error)
@@ -462,17 +473,19 @@ fun PlayScreen(
         scope.launch {
             try {
                 val resolved = gameMaster.resolve(gmContext, request, result)
-                gmNarration = resolved.narration
+                gmNarration = resolved.displayText()
                 pushGmModifiers(resolved.modifiers)
-                val effects = resolved.effects + pendingActionEffects
+                val effects = resolved.effects + if (resolved.clarification.isBlank()) pendingActionEffects else emptyList()
                 if (effects.isNotEmpty()) onStateEffects(effects)
                 gmNarration?.let(onGmReply)
                 if (resolved.xpAward > 0) onXpAward(resolved.xpAward)
-                gmStatus = gmModelStatus(resolved.modelName)
-                pendingCheck = null
-                pendingContext = null
-                pendingActionEffects = emptyList()
-                openPanel = null
+                // Provider callback retains route, latency, context and repetition status.
+                if (resolved.clarification.isBlank()) {
+                    pendingCheck = null
+                    pendingContext = null
+                    pendingActionEffects = emptyList()
+                    openPanel = null
+                }
             } catch (cancel: CancellationException) { throw cancel
             } catch (error: Exception) {
                 Log.e("LoreWiseGM", "resolve failed type=${error::class.java.name} message=${error.message}", error)
@@ -572,7 +585,8 @@ fun PlayScreen(
                     gmStatus,
                     color = when {
                         gmStatus.startsWith("GM error") -> Danger
-                        gmStatus.contains("Gemini") ||
+                        gmStatus.contains("Cloud") ||
+                            gmStatus.contains("Gemini") ||
                             gmStatus.contains("Local") ||
                             gmStatus.startsWith("Rules resolved") -> Green
                         else -> Muted
@@ -794,13 +808,27 @@ fun PlayScreen(
             onDismissRequest = { showModelPicker = false },
             title = { Text("Game Master Model", color = Text) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(
                         "Auto uses local Gemma first when configured, then falls back to Gemini.",
                         color = Muted,
                         fontSize = 12.sp
                     )
                     Spacer(Modifier.height(6.dp))
+                    Text("Narration style", color = Text)
+                    GmTone.entries.forEach { tone ->
+                        TextButton(onClick = {
+                            selectedTone = tone
+                            gmPrefs.edit().putString("tone", tone.name).apply()
+                        }) { Text((if (selectedTone == tone) "Selected: " else "") + tone.name.lowercase().replace('_', ' '), color = Text) }
+                    }
+                    TextButton(onClick = {
+                        responseLength = GmResponseLength.entries[(responseLength.ordinal + 1) % GmResponseLength.entries.size]
+                        gmPrefs.edit().putString("response_length", responseLength.name).apply()
+                    }) { Text("Response length: ${responseLength.name.lowercase()}", color = Text) }
+                    TextButton(onClick = {
+                        scenePacing = if (scenePacing == GmScenePacing.ROUTINE) GmScenePacing.IMPORTANT else GmScenePacing.ROUTINE
+                    }) { Text("Scene pacing: ${scenePacing.name.lowercase()}", color = Text) }
                     GmModelChoice.entries.forEach { choice ->
                         TextButton(
                             onClick = {
@@ -844,15 +872,6 @@ fun PlayScreen(
             containerColor = Surface
         )
     }
-}
-
-private fun gmModelStatus(modelName: String): String = when {
-    modelName.startsWith("local:") ->
-        "Local " + modelName.removePrefix("local:")
-    modelName.startsWith("gemini-") ->
-        "Gemini " + modelName.removePrefix("gemini-")
-    modelName.isBlank() -> "GM ready"
-    else -> "GM " + modelName
 }
 
 @Composable

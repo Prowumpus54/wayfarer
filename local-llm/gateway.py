@@ -28,6 +28,12 @@ PROFILES = {
 }
 
 
+def gm_messages(prompt, system_prompt=""):
+    """Separate optional hard authority from user/scene data; preserve legacy callers."""
+    messages = [{"role": "system", "content": str(system_prompt)}] if system_prompt else []
+    return messages + [{"role": "user", "content": prompt}]
+
+
 def utc_now():
     return datetime.now(timezone.utc).isoformat()
 
@@ -93,6 +99,7 @@ class Handler(BaseHTTPRequestHandler):
         started = time.perf_counter()
         received_at = utc_now()
         prompt = ""
+        data = {}
         profile = "gm"
         model = PROFILES["gm"]
 
@@ -109,7 +116,7 @@ class Handler(BaseHTTPRequestHandler):
                 "model": model,
                 "stream": False,
                 "think": False,
-                "messages": [{"role": "user", "content": prompt}],
+                "messages": gm_messages(prompt, data.get("systemPrompt", "")),
                 "options": {"temperature": 0.55, "num_ctx": 4096},
             }
             req = urllib.request.Request(
@@ -134,6 +141,7 @@ class Handler(BaseHTTPRequestHandler):
                     "durationMs": duration_ms,
                     "status": "ok",
                     "prompt": redact(prompt),
+                    "systemPrompt": redact(str(data.get("systemPrompt", ""))),
                     "response": redact(text),
                 }
             )
@@ -160,6 +168,7 @@ class Handler(BaseHTTPRequestHandler):
                     "durationMs": duration_ms,
                     "status": "error",
                     "prompt": redact(prompt),
+                    "systemPrompt": redact(str(data.get("systemPrompt", ""))),
                     "errorType": type(exc).__name__,
                     "error": redact(str(exc)[:500]),
                 }

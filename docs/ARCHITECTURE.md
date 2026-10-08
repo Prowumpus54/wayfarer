@@ -24,3 +24,7 @@ Debug builds may use cleartext LAN access for the local LLM and Firebase App Che
 ## Legacy PF2 boundary
 
 The bundled `wayfarer_rules.sqlite` is legacy PF2 reference data. PF1 characters never use it as authoritative PF1 evidence; PF1 combat uses dedicated PF1 rules/catalog code.
+
+## Conversation quality slice
+
+See [GM conversation controls](GM_CONVERSATION.md) for system/tone separation, clarification and structured OOC rendering, bounded lexical repetition memory, and live route/context/latency/retry instrumentation.

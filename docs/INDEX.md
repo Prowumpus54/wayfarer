@@ -16,3 +16,5 @@ Read in this order for engineering work:
 12. `DECISIONS.md`, `CHANGELOG.md`, and `ROADMAP.md` — rationale and forward work.
 
 Older PF2-era notes are historical only and must not override current-state documents.
+
+GM conversation behavior: [GM_CONVERSATION.md](GM_CONVERSATION.md).
