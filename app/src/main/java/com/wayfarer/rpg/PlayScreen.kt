@@ -44,7 +44,10 @@ fun PlayScreen(
     recentEvents: List<GameEvent>,
     onGmReply: (String) -> Unit,
     onStateEffects: (List<GmEffect>) -> GameStateApplication,
-    onXpAward: (Int) -> Unit
+    onXpAward: (Int) -> Unit,
+    prepareMovement: (String) -> String,
+    authoritativeScene: () -> Pair<String, ModuleSceneContext?>,
+    archivedHistory: () -> String
 ) {
     var input by session.input
     var lastAction by session.lastAction
@@ -153,55 +156,21 @@ fun PlayScreen(
 
         val action = character.characterName + ": " + clean
         val rollForAction = pendingRoll
-        val moduleScene = sceneContext
-        val recentHistory = recentEvents
-            .filter {
-                it.type in setOf(
-                    "action", "roll", "gm", "state", "encounter",
-                    "loot", "challenge", "resource", "world", "xp"
-                )
-            }
-            .take(24)
-            .asReversed()
-            .map { it.title + ": " + it.body }
-        val context = GmContext(
-            campaignTitle = campaignTitle,
-            location = currentLocation,
-            locationDescription = moduleScene?.location?.playerDescription.orEmpty(),
-            gmNotes = moduleScene?.location?.gmNotes.orEmpty(),
-            destinations = moduleScene?.destinations
-                ?.map { it.name + if (it.travelText.isBlank()) "" else " — " + it.travelText }
-                .orEmpty(),
-            npcs = moduleScene?.npcs
-                ?.map { it.name + if (it.role.isBlank()) "" else " (" + it.role + ")" }
-                .orEmpty(),
-            encounters = moduleScene?.let { scene ->
-                scene.encounters.map { encounter ->
-                    val creatures = scene.encounterCreatures
-                        .filter { it.encounterId == encounter.id }
-                        .joinToString("; ") {
-                            it.quantity.toString() + " × " + it.creatureRuleRef +
-                                if (it.role.isBlank()) "" else " (" + it.role + ")"
-                        }
-                    encounter.name + " [" + encounter.difficulty + "]: " +
-                        encounter.gmNotes +
-                        if (creatures.isBlank()) "" else "\nCreatures: " + creatures
-                }
-            }.orEmpty(),
-            treasure = moduleScene?.treasure
-                ?.map {
-                    it.name + " ×" + it.quantity +
-                        if (it.ruleRef.isBlank()) "" else " [" + it.ruleRef + "]" +
-                        if (it.hidden) " [hidden]" else "" +
-                        if (it.gmNotes.isBlank()) "" else ": " + it.gmNotes
-                }
-                .orEmpty(),
-            character = character,
-            party = party,
-            recentHistory = recentHistory,
-            runtimeState = GameStateEngine.contextLines(runtimeState),
-            action = action,
-            playerRoll = rollForAction
+        // A retry must not repeat an already committed transition.
+        val movementResult = if (logAction) prepareMovement(clean) else ""
+        if (movementResult.startsWith("Movement ")) {
+            lastAction = action
+            if (logAction) onAction(action)
+            input = ""
+            gmNarration = movementResult
+            gmStatus = "Travel needs a validated destination"
+            onGmReply(movementResult)
+            return
+        }
+        val (locationId, moduleScene) = authoritativeScene()
+        val context = ContextAssembler.assemble(
+            campaignTitle, locationId, moduleScene, character, party, runtimeState,
+            recentEvents, action, rollForAction, archivedHistory(), movementResult
         )
 
         lastAction = action
@@ -221,7 +190,7 @@ fun PlayScreen(
                             action = clean,
                             actorName = character.characterName,
                             weapon = character.meleeWeapon,
-                            scene = currentLocation + " — " +
+                            scene = context.location + " — " +
                                 moduleScene?.location?.playerDescription.orEmpty()
                         )
                     )
@@ -446,7 +415,12 @@ fun PlayScreen(
 
     fun resolveRequestedCheck() {
         val request = pendingCheck ?: return
-        val gmContext = pendingContext ?: return
+        val savedContext = pendingContext ?: return
+        val (liveLocationId, liveScene) = authoritativeScene()
+        val gmContext = ContextAssembler.assemble(
+            campaignTitle, liveLocationId, liveScene, character, party, runtimeState,
+            recentEvents, savedContext.action, savedContext.playerRoll, archivedHistory()
+        )
         if (gmBusy) return
         val baseModifier = character.modifierForCheck(request.name) ?: return
         val modifier = baseModifier + request.modifierAdjustment

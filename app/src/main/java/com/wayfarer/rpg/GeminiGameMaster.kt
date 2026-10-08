@@ -51,7 +51,8 @@ data class GmContext(
     val recentHistory: List<String>,
     val runtimeState: List<String>,
     val action: String,
-    val playerRoll: String? = null
+    val playerRoll: String? = null,
+    val historySummary: String = ""
 )
 
 enum class GmModelChoice(
@@ -156,6 +157,7 @@ Allowed effect types:
 - complete_challenge
 - complete_encounter
 
+Location is owned by Android. Movement unresolved/blocked means the party remains at the authoritative location; do not narrate arrival or invent a connection.
 Do not silently change HP, inventory, currency, spell resources, or creature state in narration.
 If one of those things changes, emit the matching effect.
 When damage is uncertain, provide a dice expression such as "1d6+1"; Android rolls it.
@@ -261,6 +263,9 @@ ${context.treasure.joinToString("\n").ifBlank { "No module treasure is listed he
 AUTHORITATIVE RUNTIME STATE:
 ${context.runtimeState.joinToString("\n").ifBlank { "No active encounter or challenge." }}
 
+OLDER RECORDED EVENTS (extractive summary; not current state):
+${context.historySummary.ifBlank { "No older recorded events." }}
+
 RECENT GAME HISTORY:
 ${context.recentHistory.joinToString("\n").ifBlank { "No prior turns are available." }}
 
@@ -321,6 +326,9 @@ ${context.treasure.joinToString("\n").ifBlank { "No module treasure is listed he
 
 AUTHORITATIVE RUNTIME STATE:
 ${context.runtimeState.joinToString("\n").ifBlank { "No active encounter or challenge." }}
+
+OLDER RECORDED EVENTS (extractive summary; not current state):
+${context.historySummary.ifBlank { "No older recorded events." }}
 
 RECENT GAME HISTORY (oldest to newest):
 ${context.recentHistory.joinToString("\n").ifBlank { "No prior turns are available." }}

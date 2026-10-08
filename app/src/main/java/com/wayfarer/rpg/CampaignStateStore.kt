@@ -51,8 +51,12 @@ class CampaignStateStore(
                     .put("id", event.id)
             )
         }
-        prefs.edit().putString("events_json", array.toString()).apply()
+        val summary = HistoryCompactor.summarize(events.drop(250), loadHistorySummary())
+        prefs.edit().putString("events_json", array.toString())
+            .putString("history_summary", summary).apply()
     }
+
+    fun loadHistorySummary(): String = prefs.getString("history_summary", "") ?: ""
 
     fun loadDiscovered(defaultId: String): Set<String> {
         val stored = prefs.getStringSet("discovered_locations", null)

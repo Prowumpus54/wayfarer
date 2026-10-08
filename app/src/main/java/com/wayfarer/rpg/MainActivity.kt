@@ -133,7 +133,7 @@ fun LoreWiseApp() {
                 add(
                     GameEvent(
                         "Campaign ready",
-                        "The party is in Oakhurst, near the Old Road and the Sunless Citadel.",
+                        "Campaign loaded at saved location: " + currentLocationId + ".",
                         "event"
                     )
                 )
@@ -159,8 +159,8 @@ fun LoreWiseApp() {
                 incoming.asReversed().forEach { event ->
                     if (known.add(event.id)) events.add(0, event)
                 }
-                while (events.size > 250) events.removeAt(events.lastIndex)
                 stateStore.saveEvents(events)
+                while (events.size > 250) events.removeAt(events.lastIndex)
             }
         )
         onDispose { syncRepo?.close() }
@@ -171,7 +171,7 @@ fun LoreWiseApp() {
     }
 
     val currentLocation =
-        sceneContext?.location?.name ?: "Oakhurst"
+        sceneContext?.location?.name ?: "Unresolved saved location [$currentLocationId]"
     val destinations =
         sceneContext?.destinations.orEmpty()
     val quests = remember(campaign.moduleId) {
@@ -195,8 +195,8 @@ fun LoreWiseApp() {
         if (events.none { it.id == event.id }) {
             events.add(0, event)
         }
-        while (events.size > 250) events.removeAt(events.lastIndex)
         stateStore.saveEvents(events)
+        while (events.size > 250) events.removeAt(events.lastIndex)
         syncRepo?.publishEvent(event)
     }
 
@@ -208,26 +208,35 @@ fun LoreWiseApp() {
         }
     }
 
-    fun travel(destination: ModuleDestination) {
+    fun travel(destination: ModuleDestination): LocationTransition {
         val origin = currentLocation
-        currentLocationId = destination.id
-        stateStore.saveLocation(destination.id)
+        val savedId = stateStore.loadLocation(manifest.startingLocation)
+        val result = LocationTransitionResolver.commit(
+            destination, moduleRepo.sceneContext(campaign.moduleId, savedId),
+            blocked = runtimeState.activeEncounter?.status == EncounterStatus.ACTIVE ||
+                runtimeState.activeChallenge?.status == ChallengeStatus.ACTIVE
+        ) { validatedId ->
+            stateStore.saveLocation(validatedId)
+            currentLocationId = validatedId
+        }
+        val validated = result.destination ?: return result
 
-        if (!discovered.contains(destination.id)) {
-            discovered.add(destination.id)
+        if (!discovered.contains(validated.id)) {
+            discovered.add(validated.id)
             stateStore.saveDiscovered(discovered.toSet())
         }
 
         addEvent(
             GameEvent(
-                "Traveled to " + destination.name,
-                destination.travelText.ifBlank {
+                "Traveled to " + validated.name,
+                validated.travelText.ifBlank {
                     "The party traveled from " + origin +
-                        " to " + destination.name + "."
+                        " to " + validated.name + "."
                 },
                 "travel"
             )
         )
+        return result
     }
 
     if (showCampaignHub) {
@@ -323,6 +332,19 @@ fun LoreWiseApp() {
                     application.events.forEach(::addEvent)
                     application
                 },
+                prepareMovement = { action ->
+                    val savedId = stateStore.loadLocation(manifest.startingLocation)
+                    val liveScene = moduleRepo.sceneContext(campaign.moduleId, savedId)
+                    val proposal = LocationTransitionResolver.propose(action, liveScene)
+                    if (proposal.destination != null) {
+                        travel(proposal.destination).message
+                    } else proposal.message
+                },
+                authoritativeScene = {
+                    val savedId = stateStore.loadLocation(manifest.startingLocation)
+                    savedId to moduleRepo.sceneContext(campaign.moduleId, savedId)
+                },
+                archivedHistory = { stateStore.loadHistorySummary() },
                 onXpAward = { amount ->
                     val active = characters[selectedMember]
                     val updated = active.copy(xp = active.xp + amount)
@@ -344,7 +366,7 @@ fun LoreWiseApp() {
                 currentLocation = sceneContext?.location,
                 destinations = destinations,
                 discoveredLocationIds = discovered.toSet(),
-                onTravel = ::travel
+                onTravel = { travel(it) }
             )
 
             AppScreen.Journal -> JournalScreen(
